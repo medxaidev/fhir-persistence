@@ -1,0 +1,545 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DDLGenerator — Snapshot Tests > Binary DDL snapshot 1`] = `
+"CREATE TABLE IF NOT EXISTS "Binary" (
+  "id" UUID NOT NULL,
+  "content" TEXT NOT NULL,
+  "lastUpdated" TIMESTAMPTZ NOT NULL,
+  "deleted" BOOLEAN NOT NULL DEFAULT false,
+  "projectId" UUID NOT NULL,
+  "__version" INTEGER NOT NULL,
+  "_source" TEXT,
+  "_profile" TEXT[],
+  "___tag" UUID[],
+  "___tagText" TEXT[],
+  "___tagSort" TEXT,
+  "___security" UUID[],
+  "___securityText" TEXT[],
+  "___securitySort" TEXT,
+  "__sharedTokens" UUID[],
+  "__sharedTokensText" TEXT[],
+  CONSTRAINT "Binary_pk" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "Binary_History" (
+  "versionId" UUID NOT NULL,
+  "id" UUID NOT NULL,
+  "content" TEXT NOT NULL,
+  "lastUpdated" TIMESTAMPTZ NOT NULL,
+  CONSTRAINT "Binary_History_pk" PRIMARY KEY ("versionId")
+);
+
+CREATE TABLE IF NOT EXISTS "Binary_References" (
+  "resourceId" UUID NOT NULL,
+  "targetId" UUID NOT NULL,
+  "code" TEXT NOT NULL,
+  CONSTRAINT "Binary_References_pk" PRIMARY KEY ("resourceId", "targetId", "code")
+);
+
+CREATE INDEX IF NOT EXISTS "Binary_lastUpdated_idx"
+  ON "Binary" USING btree ("lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Binary_projectId_lastUpdated_idx"
+  ON "Binary" USING btree ("projectId", "lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Binary_projectId_idx"
+  ON "Binary" USING btree ("projectId");
+
+CREATE INDEX IF NOT EXISTS "Binary__source_idx"
+  ON "Binary" USING btree ("_source");
+
+CREATE INDEX IF NOT EXISTS "Binary_profile_idx"
+  ON "Binary" USING gin ("_profile");
+
+CREATE INDEX IF NOT EXISTS "Binary___version_idx"
+  ON "Binary" USING btree ("__version");
+
+CREATE INDEX IF NOT EXISTS "Binary_reindex_idx"
+  ON "Binary" USING btree ("lastUpdated", "__version")
+  WHERE deleted = false;
+
+CREATE INDEX IF NOT EXISTS "Binary___sharedTokens_idx"
+  ON "Binary" USING gin ("__sharedTokens");
+
+CREATE INDEX IF NOT EXISTS "Binary____tagText_trgm_idx"
+  ON "Binary" USING gin (token_array_to_text("___tagText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Binary___sharedTokensText_trgm_idx"
+  ON "Binary" USING gin (token_array_to_text("__sharedTokensText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Binary_History_id_idx"
+  ON "Binary_History" USING btree ("id");
+
+CREATE INDEX IF NOT EXISTS "Binary_History_lastUpdated_idx"
+  ON "Binary_History" USING btree ("lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Binary_References_targetId_code_idx"
+  ON "Binary_References" USING btree ("targetId", "code")
+  INCLUDE ("resourceId");"
+`;
+
+exports[`DDLGenerator — Snapshot Tests > Observation DDL snapshot 1`] = `
+"CREATE TABLE IF NOT EXISTS "Observation" (
+  "id" UUID NOT NULL,
+  "content" TEXT NOT NULL,
+  "lastUpdated" TIMESTAMPTZ NOT NULL,
+  "deleted" BOOLEAN NOT NULL DEFAULT false,
+  "projectId" UUID NOT NULL,
+  "__version" INTEGER NOT NULL,
+  "_source" TEXT,
+  "_profile" TEXT[],
+  "___tag" UUID[],
+  "___tagText" TEXT[],
+  "___tagSort" TEXT,
+  "___security" UUID[],
+  "___securityText" TEXT[],
+  "___securitySort" TEXT,
+  "compartments" UUID[] NOT NULL,
+  "basedOn" TEXT[],
+  "__category" UUID[],
+  "__categoryText" TEXT[],
+  "__categorySort" TEXT,
+  "__code" UUID[],
+  "__codeText" TEXT[],
+  "__codeSort" TEXT,
+  "__comboCode" UUID[],
+  "__comboCodeText" TEXT[],
+  "__comboCodeSort" TEXT,
+  "__comboDataAbsentReason" UUID[],
+  "__comboDataAbsentReasonText" TEXT[],
+  "__comboDataAbsentReasonSort" TEXT,
+  "__comboValueConcept" UUID[],
+  "__comboValueConceptText" TEXT[],
+  "__comboValueConceptSort" TEXT,
+  "comboValueQuantity" DOUBLE PRECISION[],
+  "__componentCode" UUID[],
+  "__componentCodeText" TEXT[],
+  "__componentCodeSort" TEXT,
+  "__componentDataAbsentReason" UUID[],
+  "__componentDataAbsentReasonText" TEXT[],
+  "__componentDataAbsentReasonSort" TEXT,
+  "__componentValueConcept" UUID[],
+  "__componentValueConceptText" TEXT[],
+  "__componentValueConceptSort" TEXT,
+  "componentValueQuantity" DOUBLE PRECISION[],
+  "__dataAbsentReason" UUID[],
+  "__dataAbsentReasonText" TEXT[],
+  "__dataAbsentReasonSort" TEXT,
+  "date" TIMESTAMPTZ,
+  "derivedFrom" TEXT[],
+  "device" TEXT,
+  "encounter" TEXT,
+  "focus" TEXT[],
+  "hasMember" TEXT[],
+  "__identifier" UUID[],
+  "__identifierText" TEXT[],
+  "__identifierSort" TEXT,
+  "__method" UUID[],
+  "__methodText" TEXT[],
+  "__methodSort" TEXT,
+  "partOf" TEXT[],
+  "patient" TEXT,
+  "performer" TEXT[],
+  "specimen" TEXT,
+  "__status" UUID[],
+  "__statusText" TEXT[],
+  "__statusSort" TEXT,
+  "subject" TEXT,
+  "__valueConcept" UUID[],
+  "__valueConceptText" TEXT[],
+  "__valueConceptSort" TEXT,
+  "valueDate" TIMESTAMPTZ,
+  "valueQuantity" DOUBLE PRECISION,
+  "valueString" TEXT,
+  "__sharedTokens" UUID[],
+  "__sharedTokensText" TEXT[],
+  CONSTRAINT "Observation_pk" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "Observation_History" (
+  "versionId" UUID NOT NULL,
+  "id" UUID NOT NULL,
+  "content" TEXT NOT NULL,
+  "lastUpdated" TIMESTAMPTZ NOT NULL,
+  CONSTRAINT "Observation_History_pk" PRIMARY KEY ("versionId")
+);
+
+CREATE TABLE IF NOT EXISTS "Observation_References" (
+  "resourceId" UUID NOT NULL,
+  "targetId" UUID NOT NULL,
+  "code" TEXT NOT NULL,
+  CONSTRAINT "Observation_References_pk" PRIMARY KEY ("resourceId", "targetId", "code")
+);
+
+CREATE INDEX IF NOT EXISTS "Observation_lastUpdated_idx"
+  ON "Observation" USING btree ("lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Observation_projectId_lastUpdated_idx"
+  ON "Observation" USING btree ("projectId", "lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Observation_projectId_idx"
+  ON "Observation" USING btree ("projectId");
+
+CREATE INDEX IF NOT EXISTS "Observation__source_idx"
+  ON "Observation" USING btree ("_source");
+
+CREATE INDEX IF NOT EXISTS "Observation_profile_idx"
+  ON "Observation" USING gin ("_profile");
+
+CREATE INDEX IF NOT EXISTS "Observation___version_idx"
+  ON "Observation" USING btree ("__version");
+
+CREATE INDEX IF NOT EXISTS "Observation_reindex_idx"
+  ON "Observation" USING btree ("lastUpdated", "__version")
+  WHERE deleted = false;
+
+CREATE INDEX IF NOT EXISTS "Observation_compartments_idx"
+  ON "Observation" USING gin ("compartments");
+
+CREATE INDEX IF NOT EXISTS "Observation_basedOn_idx"
+  ON "Observation" USING gin ("basedOn");
+
+CREATE INDEX IF NOT EXISTS "Observation___category_idx"
+  ON "Observation" USING gin ("__category");
+
+CREATE INDEX IF NOT EXISTS "Observation___code_idx"
+  ON "Observation" USING gin ("__code");
+
+CREATE INDEX IF NOT EXISTS "Observation___comboCode_idx"
+  ON "Observation" USING gin ("__comboCode");
+
+CREATE INDEX IF NOT EXISTS "Observation___comboDataAbsentReason_idx"
+  ON "Observation" USING gin ("__comboDataAbsentReason");
+
+CREATE INDEX IF NOT EXISTS "Observation___comboValueConcept_idx"
+  ON "Observation" USING gin ("__comboValueConcept");
+
+CREATE INDEX IF NOT EXISTS "Observation_comboValueQuantity_idx"
+  ON "Observation" USING gin ("comboValueQuantity");
+
+CREATE INDEX IF NOT EXISTS "Observation___componentCode_idx"
+  ON "Observation" USING gin ("__componentCode");
+
+CREATE INDEX IF NOT EXISTS "Observation___componentDataAbsentReason_idx"
+  ON "Observation" USING gin ("__componentDataAbsentReason");
+
+CREATE INDEX IF NOT EXISTS "Observation___componentValueConcept_idx"
+  ON "Observation" USING gin ("__componentValueConcept");
+
+CREATE INDEX IF NOT EXISTS "Observation_componentValueQuantity_idx"
+  ON "Observation" USING gin ("componentValueQuantity");
+
+CREATE INDEX IF NOT EXISTS "Observation___dataAbsentReason_idx"
+  ON "Observation" USING gin ("__dataAbsentReason");
+
+CREATE INDEX IF NOT EXISTS "Observation_date_idx"
+  ON "Observation" USING btree ("date");
+
+CREATE INDEX IF NOT EXISTS "Observation_derivedFrom_idx"
+  ON "Observation" USING gin ("derivedFrom");
+
+CREATE INDEX IF NOT EXISTS "Observation_device_idx"
+  ON "Observation" USING btree ("device");
+
+CREATE INDEX IF NOT EXISTS "Observation_encounter_idx"
+  ON "Observation" USING btree ("encounter");
+
+CREATE INDEX IF NOT EXISTS "Observation_focus_idx"
+  ON "Observation" USING gin ("focus");
+
+CREATE INDEX IF NOT EXISTS "Observation_hasMember_idx"
+  ON "Observation" USING gin ("hasMember");
+
+CREATE INDEX IF NOT EXISTS "Observation___identifier_idx"
+  ON "Observation" USING gin ("__identifier");
+
+CREATE INDEX IF NOT EXISTS "Observation___method_idx"
+  ON "Observation" USING gin ("__method");
+
+CREATE INDEX IF NOT EXISTS "Observation_partOf_idx"
+  ON "Observation" USING gin ("partOf");
+
+CREATE INDEX IF NOT EXISTS "Observation_patient_idx"
+  ON "Observation" USING btree ("patient");
+
+CREATE INDEX IF NOT EXISTS "Observation_performer_idx"
+  ON "Observation" USING gin ("performer");
+
+CREATE INDEX IF NOT EXISTS "Observation_specimen_idx"
+  ON "Observation" USING btree ("specimen");
+
+CREATE INDEX IF NOT EXISTS "Observation___status_idx"
+  ON "Observation" USING gin ("__status");
+
+CREATE INDEX IF NOT EXISTS "Observation_subject_idx"
+  ON "Observation" USING btree ("subject");
+
+CREATE INDEX IF NOT EXISTS "Observation___valueConcept_idx"
+  ON "Observation" USING gin ("__valueConcept");
+
+CREATE INDEX IF NOT EXISTS "Observation_valueDate_idx"
+  ON "Observation" USING btree ("valueDate");
+
+CREATE INDEX IF NOT EXISTS "Observation_valueQuantity_idx"
+  ON "Observation" USING btree ("valueQuantity");
+
+CREATE INDEX IF NOT EXISTS "Observation_valueString_idx"
+  ON "Observation" USING btree ("valueString");
+
+CREATE INDEX IF NOT EXISTS "Observation___sharedTokens_idx"
+  ON "Observation" USING gin ("__sharedTokens");
+
+CREATE INDEX IF NOT EXISTS "Observation___categoryText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__categoryText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___codeText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__codeText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___comboCodeText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__comboCodeText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___comboDataAbsentReasonText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__comboDataAbsentReasonText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___comboValueConceptText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__comboValueConceptText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___componentCodeText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__componentCodeText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___componentDataAbsentReasonText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__componentDataAbsentReasonText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___componentValueConceptText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__componentValueConceptText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___dataAbsentReasonText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__dataAbsentReasonText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___identifierText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__identifierText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___methodText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__methodText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___statusText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__statusText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___valueConceptText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__valueConceptText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation____tagText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("___tagText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation___sharedTokensText_trgm_idx"
+  ON "Observation" USING gin (token_array_to_text("__sharedTokensText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Observation_History_id_idx"
+  ON "Observation_History" USING btree ("id");
+
+CREATE INDEX IF NOT EXISTS "Observation_History_lastUpdated_idx"
+  ON "Observation_History" USING btree ("lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Observation_References_targetId_code_idx"
+  ON "Observation_References" USING btree ("targetId", "code")
+  INCLUDE ("resourceId");"
+`;
+
+exports[`DDLGenerator — Snapshot Tests > Patient DDL snapshot 1`] = `
+"CREATE TABLE IF NOT EXISTS "Patient" (
+  "id" UUID NOT NULL,
+  "content" TEXT NOT NULL,
+  "lastUpdated" TIMESTAMPTZ NOT NULL,
+  "deleted" BOOLEAN NOT NULL DEFAULT false,
+  "projectId" UUID NOT NULL,
+  "__version" INTEGER NOT NULL,
+  "_source" TEXT,
+  "_profile" TEXT[],
+  "___tag" UUID[],
+  "___tagText" TEXT[],
+  "___tagSort" TEXT,
+  "___security" UUID[],
+  "___securityText" TEXT[],
+  "___securitySort" TEXT,
+  "compartments" UUID[] NOT NULL,
+  "__active" UUID[],
+  "__activeText" TEXT[],
+  "__activeSort" TEXT,
+  "__addressSort" TEXT,
+  "__addressCitySort" TEXT,
+  "__addressCountrySort" TEXT,
+  "__addressPostalcodeSort" TEXT,
+  "__addressStateSort" TEXT,
+  "__addressUseSort" TEXT,
+  "birthdate" TIMESTAMPTZ,
+  "deathDate" TIMESTAMPTZ,
+  "__deceased" UUID[],
+  "__deceasedText" TEXT[],
+  "__deceasedSort" TEXT,
+  "__emailSort" TEXT,
+  "__familySort" TEXT,
+  "__gender" UUID[],
+  "__genderText" TEXT[],
+  "__genderSort" TEXT,
+  "generalPractitioner" TEXT[],
+  "__givenSort" TEXT,
+  "__identifier" UUID[],
+  "__identifierText" TEXT[],
+  "__identifierSort" TEXT,
+  "__language" UUID[],
+  "__languageText" TEXT[],
+  "__languageSort" TEXT,
+  "link" TEXT[],
+  "__nameSort" TEXT,
+  "organization" TEXT,
+  "__phoneSort" TEXT,
+  "__phoneticSort" TEXT,
+  "__telecomSort" TEXT,
+  "__sharedTokens" UUID[],
+  "__sharedTokensText" TEXT[],
+  CONSTRAINT "Patient_pk" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "Patient_History" (
+  "versionId" UUID NOT NULL,
+  "id" UUID NOT NULL,
+  "content" TEXT NOT NULL,
+  "lastUpdated" TIMESTAMPTZ NOT NULL,
+  CONSTRAINT "Patient_History_pk" PRIMARY KEY ("versionId")
+);
+
+CREATE TABLE IF NOT EXISTS "Patient_References" (
+  "resourceId" UUID NOT NULL,
+  "targetId" UUID NOT NULL,
+  "code" TEXT NOT NULL,
+  CONSTRAINT "Patient_References_pk" PRIMARY KEY ("resourceId", "targetId", "code")
+);
+
+CREATE INDEX IF NOT EXISTS "Patient_lastUpdated_idx"
+  ON "Patient" USING btree ("lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Patient_projectId_lastUpdated_idx"
+  ON "Patient" USING btree ("projectId", "lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Patient_projectId_idx"
+  ON "Patient" USING btree ("projectId");
+
+CREATE INDEX IF NOT EXISTS "Patient__source_idx"
+  ON "Patient" USING btree ("_source");
+
+CREATE INDEX IF NOT EXISTS "Patient_profile_idx"
+  ON "Patient" USING gin ("_profile");
+
+CREATE INDEX IF NOT EXISTS "Patient___version_idx"
+  ON "Patient" USING btree ("__version");
+
+CREATE INDEX IF NOT EXISTS "Patient_reindex_idx"
+  ON "Patient" USING btree ("lastUpdated", "__version")
+  WHERE deleted = false;
+
+CREATE INDEX IF NOT EXISTS "Patient_compartments_idx"
+  ON "Patient" USING gin ("compartments");
+
+CREATE INDEX IF NOT EXISTS "Patient___active_idx"
+  ON "Patient" USING gin ("__active");
+
+CREATE INDEX IF NOT EXISTS "Patient___addressSort_idx"
+  ON "Patient" USING btree ("__addressSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___addressCitySort_idx"
+  ON "Patient" USING btree ("__addressCitySort");
+
+CREATE INDEX IF NOT EXISTS "Patient___addressCountrySort_idx"
+  ON "Patient" USING btree ("__addressCountrySort");
+
+CREATE INDEX IF NOT EXISTS "Patient___addressPostalcodeSort_idx"
+  ON "Patient" USING btree ("__addressPostalcodeSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___addressStateSort_idx"
+  ON "Patient" USING btree ("__addressStateSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___addressUseSort_idx"
+  ON "Patient" USING btree ("__addressUseSort");
+
+CREATE INDEX IF NOT EXISTS "Patient_birthdate_idx"
+  ON "Patient" USING btree ("birthdate");
+
+CREATE INDEX IF NOT EXISTS "Patient_deathDate_idx"
+  ON "Patient" USING btree ("deathDate");
+
+CREATE INDEX IF NOT EXISTS "Patient___deceased_idx"
+  ON "Patient" USING gin ("__deceased");
+
+CREATE INDEX IF NOT EXISTS "Patient___emailSort_idx"
+  ON "Patient" USING btree ("__emailSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___familySort_idx"
+  ON "Patient" USING btree ("__familySort");
+
+CREATE INDEX IF NOT EXISTS "Patient___gender_idx"
+  ON "Patient" USING gin ("__gender");
+
+CREATE INDEX IF NOT EXISTS "Patient_generalPractitioner_idx"
+  ON "Patient" USING gin ("generalPractitioner");
+
+CREATE INDEX IF NOT EXISTS "Patient___givenSort_idx"
+  ON "Patient" USING btree ("__givenSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___identifier_idx"
+  ON "Patient" USING gin ("__identifier");
+
+CREATE INDEX IF NOT EXISTS "Patient___language_idx"
+  ON "Patient" USING gin ("__language");
+
+CREATE INDEX IF NOT EXISTS "Patient_link_idx"
+  ON "Patient" USING gin ("link");
+
+CREATE INDEX IF NOT EXISTS "Patient___nameSort_idx"
+  ON "Patient" USING btree ("__nameSort");
+
+CREATE INDEX IF NOT EXISTS "Patient_organization_idx"
+  ON "Patient" USING btree ("organization");
+
+CREATE INDEX IF NOT EXISTS "Patient___phoneSort_idx"
+  ON "Patient" USING btree ("__phoneSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___phoneticSort_idx"
+  ON "Patient" USING btree ("__phoneticSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___telecomSort_idx"
+  ON "Patient" USING btree ("__telecomSort");
+
+CREATE INDEX IF NOT EXISTS "Patient___sharedTokens_idx"
+  ON "Patient" USING gin ("__sharedTokens");
+
+CREATE INDEX IF NOT EXISTS "Patient___activeText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("__activeText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient___deceasedText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("__deceasedText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient___genderText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("__genderText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient___identifierText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("__identifierText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient___languageText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("__languageText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient____tagText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("___tagText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient___sharedTokensText_trgm_idx"
+  ON "Patient" USING gin (token_array_to_text("__sharedTokensText") gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS "Patient_History_id_idx"
+  ON "Patient_History" USING btree ("id");
+
+CREATE INDEX IF NOT EXISTS "Patient_History_lastUpdated_idx"
+  ON "Patient_History" USING btree ("lastUpdated");
+
+CREATE INDEX IF NOT EXISTS "Patient_References_targetId_code_idx"
+  ON "Patient_References" USING btree ("targetId", "code")
+  INCLUDE ("resourceId");"
+`;
