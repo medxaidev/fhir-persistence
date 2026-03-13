@@ -36,6 +36,7 @@ import {
   generateResourceDDL,
   generateSchemaDDLString,
 } from '../schema/ddl-generator.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 
 // =============================================================================
 // Section 1: Argument Parsing
@@ -47,6 +48,7 @@ interface CliOptions {
   resource: string | null;
   format: 'text' | 'json';
   version: string;
+  dialect: DDLDialect;
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -56,6 +58,7 @@ function parseArgs(args: string[]): CliOptions {
     resource: null,
     format: 'text',
     version: 'fhir-r4-v4.0.1',
+    dialect: 'sqlite',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -74,6 +77,9 @@ function parseArgs(args: string[]): CliOptions {
         break;
       case '--version':
         options.version = args[++i];
+        break;
+      case '--dialect':
+        options.dialect = args[++i] as DDLDialect;
         break;
       case '--help':
       case '-h':
@@ -100,6 +106,7 @@ Options:
   --resource <type>    Generate DDL for single resource type only
   --format text|json   Output format (default: text)
   --version <string>   Schema version string (default: fhir-r4-v4.0.1)
+  --dialect <string>   Database dialect: sqlite | postgres (default: sqlite)
   --help, -h           Show this help message
 `);
 }
@@ -152,7 +159,7 @@ export function run(args: string[]): string {
     if (options.format === 'json') {
       output = JSON.stringify(tableSet, null, 2);
     } else {
-      const statements = generateResourceDDL(tableSet);
+      const statements = generateResourceDDL(tableSet, options.dialect);
       output = statements.join('\n\n') + '\n';
     }
   } else {
@@ -161,7 +168,7 @@ export function run(args: string[]): string {
     if (options.format === 'json') {
       output = JSON.stringify(schema, null, 2);
     } else {
-      output = generateSchemaDDLString(schema);
+      output = generateSchemaDDLString(schema, options.dialect);
     }
   }
 

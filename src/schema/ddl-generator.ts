@@ -1,8 +1,11 @@
 /**
  * DDL Generator
  *
- * Converts `ResourceTableSet` / `SchemaDefinition` to PostgreSQL DDL strings.
+ * Converts `ResourceTableSet` / `SchemaDefinition` to SQL DDL strings.
  * All functions are pure — no database dependency.
+ *
+ * v2 upgrade: Now supports both SQLite and PostgreSQL dialects.
+ * The `dialect` parameter controls type mapping and syntax differences.
  *
  * ## Output Format
  *
@@ -25,7 +28,47 @@ import type {
   GlobalLookupTableSchema,
   ResourceTableSet,
   SchemaDefinition,
+  SqlColumnType,
 } from './table-schema.js';
+
+// =============================================================================
+// Section 0: Dialect Type
+// =============================================================================
+
+export type DDLDialect = 'sqlite' | 'postgres';
+
+/**
+ * Map a logical SqlColumnType to the dialect-specific type string.
+ *
+ * SQLite mappings:
+ * - BOOLEAN → INTEGER
+ * - TIMESTAMPTZ → TEXT
+ * - TEXT[] → TEXT (JSON array)
+ * - DOUBLE PRECISION → REAL
+ * - DATE → TEXT
+ * - NUMERIC → REAL
+ * - BIGINT → INTEGER
+ *
+ * PostgreSQL: types pass through unchanged.
+ */
+function mapColumnType(type: SqlColumnType, dialect: DDLDialect): string {
+  if (dialect === 'postgres') return type;
+
+  // SQLite type mapping
+  switch (type) {
+    case 'BOOLEAN': return 'INTEGER';
+    case 'TIMESTAMPTZ': return 'TEXT';
+    case 'TIMESTAMPTZ[]': return 'TEXT';
+    case 'TEXT[]': return 'TEXT';
+    case 'DOUBLE PRECISION': return 'REAL';
+    case 'DOUBLE PRECISION[]': return 'TEXT';
+    case 'DATE': return 'TEXT';
+    case 'DATE[]': return 'TEXT';
+    case 'NUMERIC': return 'REAL';
+    case 'BIGINT': return 'INTEGER';
+    default: return type;
+  }
+}
 
 // =============================================================================
 // Section 1: Column DDL
@@ -34,10 +77,11 @@ import type {
 /**
  * Generate the DDL fragment for a single column definition.
  *
- * Example: `"id" UUID NOT NULL`
+ * Example: `"id" TEXT NOT NULL`
  */
-function columnDDL(col: ColumnSchema): string {
-  const parts: string[] = [`"${col.name}"`, col.type];
+function columnDDL(col: ColumnSchema, dialect: DDLDialect = 'postgres'): string {
+  const mappedType = mapColumnType(col.type, dialect);
+  const parts: string[] = [`"${col.name}"`, mappedType];
 
   if (col.notNull) {
     parts.push('NOT NULL');
@@ -79,14 +123,14 @@ function constraintDDL(constraint: ConstraintSchema): string {
 /**
  * Generate a `CREATE TABLE IF NOT EXISTS` statement for a main table.
  */
-export function generateCreateMainTable(table: MainTableSchema): string {
+export function generateCreateMainTable(table: MainTableSchema, dialect: DDLDialect = 'postgres'): string {
   const lines: string[] = [];
 
   lines.push(`CREATE TABLE IF NOT EXISTS "${table.tableName}" (`);
 
   const entries: string[] = [];
   for (const col of table.columns) {
-    entries.push(columnDDL(col));
+    entries.push(columnDDL(col, dialect));
   }
   for (const constraint of table.constraints) {
     entries.push(constraintDDL(constraint));
@@ -100,22 +144,30 @@ export function generateCreateMainTable(table: MainTableSchema): string {
 
 /**
  * Generate a `CREATE TABLE IF NOT EXISTS` statement for a history table.
+ *
+ * v2: Handles versionSeq AUTOINCREMENT for SQLite and GENERATED ALWAYS for PG.
  */
-export function generateCreateHistoryTable(table: HistoryTableSchema): string {
+export function generateCreateHistoryTable(table: HistoryTableSchema, dialect: DDLDialect = 'postgres'): string {
   const lines: string[] = [];
 
   lines.push(`CREATE TABLE IF NOT EXISTS "${table.tableName}" (`);
 
   const entries: string[] = [];
   for (const col of table.columns) {
-    entries.push(columnDDL(col));
+    if (col.name === 'versionSeq' && col.primaryKey) {
+      // Special handling for auto-increment PK
+      if (dialect === 'sqlite') {
+        entries.push('  "versionSeq" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT');
+      } else {
+        entries.push('  "versionSeq" INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY');
+      }
+      continue;
+    }
+    entries.push(columnDDL(col, dialect));
   }
 
-  // History table PK is on versionId
-  const pkCol = table.columns.find((c) => c.primaryKey);
-  if (pkCol) {
-    entries.push(`  CONSTRAINT "${table.tableName}_pk" PRIMARY KEY ("${pkCol.name}")`);
-  }
+  // Add UNIQUE constraint on (id, versionId)
+  entries.push(`  UNIQUE ("id", "versionId")`);
 
   lines.push(entries.join(',\n'));
   lines.push(');');
@@ -126,20 +178,22 @@ export function generateCreateHistoryTable(table: HistoryTableSchema): string {
 /**
  * Generate a `CREATE TABLE IF NOT EXISTS` statement for a references table.
  */
-export function generateCreateReferencesTable(table: ReferencesTableSchema): string {
+export function generateCreateReferencesTable(table: ReferencesTableSchema, dialect: DDLDialect = 'postgres'): string {
   const lines: string[] = [];
 
   lines.push(`CREATE TABLE IF NOT EXISTS "${table.tableName}" (`);
 
   const entries: string[] = [];
   for (const col of table.columns) {
-    entries.push(columnDDL(col));
+    entries.push(columnDDL(col, dialect));
   }
 
-  // Composite primary key
-  if (table.compositePrimaryKey.length > 0) {
-    const pkCols = table.compositePrimaryKey.map((c) => `"${c}"`).join(', ');
-    entries.push(`  CONSTRAINT "${table.tableName}_pk" PRIMARY KEY (${pkCols})`);
+  // v2: References tables no longer use composite PK (rows are not unique per (resourceId, target, code))
+  // Keeping the constraint generation for backward compatibility if set
+  if (table.compositePrimaryKey && table.compositePrimaryKey.length > 0) {
+    // Skip composite PK for v2 — references can have duplicates
+    // const pkCols = table.compositePrimaryKey.map((c) => `"${c}"`).join(', ');
+    // entries.push(`  CONSTRAINT "${table.tableName}_pk" PRIMARY KEY (${pkCols})`);
   }
 
   lines.push(entries.join(',\n'));
@@ -160,7 +214,16 @@ export function generateCreateReferencesTable(table: ReferencesTableSchema): str
  * - `expression` — functional expression to index instead of plain columns
  *   (e.g., `to_tsvector('simple'::regconfig, family)`)
  */
-export function generateCreateIndex(index: IndexSchema, tableName: string): string {
+export function generateCreateIndex(index: IndexSchema, tableName: string, dialect: DDLDialect = 'postgres'): string | null {
+  // SQLite: skip GIN indexes (not supported)
+  if (dialect === 'sqlite' && (index.indexType === 'gin' || index.indexType === 'gist')) {
+    return null;
+  }
+  // SQLite: skip expression indexes and opClass indexes (PG-only features)
+  if (dialect === 'sqlite' && (index.expression || index.opClass)) {
+    return null;
+  }
+
   const unique = index.unique ? 'UNIQUE ' : '';
 
   let indexExpr: string;
@@ -172,15 +235,26 @@ export function generateCreateIndex(index: IndexSchema, tableName: string): stri
     indexExpr = index.columns.map((c) => `"${c}"`).join(', ');
   }
 
-  let sql = `CREATE ${unique}INDEX IF NOT EXISTS "${index.name}"\n  ON "${tableName}" USING ${index.indexType} (${indexExpr})`;
+  let sql: string;
+  if (dialect === 'sqlite') {
+    // SQLite doesn't support USING clause
+    sql = `CREATE ${unique}INDEX IF NOT EXISTS "${index.name}" ON "${tableName}" (${indexExpr})`;
+  } else {
+    sql = `CREATE ${unique}INDEX IF NOT EXISTS "${index.name}"\n  ON "${tableName}" USING ${index.indexType} (${indexExpr})`;
+  }
 
-  if (index.include && index.include.length > 0) {
+  if (index.include && index.include.length > 0 && dialect === 'postgres') {
     const includeCols = index.include.map((c) => `"${c}"`).join(', ');
     sql += `\n  INCLUDE (${includeCols})`;
   }
 
   if (index.where) {
-    sql += `\n  WHERE ${index.where}`;
+    if (dialect === 'sqlite') {
+      // SQLite supports WHERE in partial indexes
+      sql += ` WHERE ${index.where}`;
+    } else {
+      sql += `\n  WHERE ${index.where}`;
+    }
   }
 
   sql += ';';
@@ -200,27 +274,30 @@ export function generateCreateIndex(index: IndexSchema, tableName: string): stri
  * 3. CREATE TABLE for references table
  * 4. All CREATE INDEX statements
  */
-export function generateResourceDDL(tableSet: ResourceTableSet): string[] {
+export function generateResourceDDL(tableSet: ResourceTableSet, dialect: DDLDialect = 'postgres'): string[] {
   const statements: string[] = [];
 
   // Tables
-  statements.push(generateCreateMainTable(tableSet.main));
-  statements.push(generateCreateHistoryTable(tableSet.history));
-  statements.push(generateCreateReferencesTable(tableSet.references));
+  statements.push(generateCreateMainTable(tableSet.main, dialect));
+  statements.push(generateCreateHistoryTable(tableSet.history, dialect));
+  statements.push(generateCreateReferencesTable(tableSet.references, dialect));
 
   // Indexes — main table
   for (const idx of tableSet.main.indexes) {
-    statements.push(generateCreateIndex(idx, tableSet.main.tableName));
+    const sql = generateCreateIndex(idx, tableSet.main.tableName, dialect);
+    if (sql) statements.push(sql);
   }
 
   // Indexes — history table
   for (const idx of tableSet.history.indexes) {
-    statements.push(generateCreateIndex(idx, tableSet.history.tableName));
+    const sql = generateCreateIndex(idx, tableSet.history.tableName, dialect);
+    if (sql) statements.push(sql);
   }
 
   // Indexes — references table
   for (const idx of tableSet.references.indexes) {
-    statements.push(generateCreateIndex(idx, tableSet.references.tableName));
+    const sql = generateCreateIndex(idx, tableSet.references.tableName, dialect);
+    if (sql) statements.push(sql);
   }
 
   return statements;
@@ -229,14 +306,14 @@ export function generateResourceDDL(tableSet: ResourceTableSet): string[] {
 /**
  * Generate a `CREATE TABLE IF NOT EXISTS` statement for a lookup sub-table.
  */
-export function generateCreateLookupTable(table: LookupTableSchema): string {
+export function generateCreateLookupTable(table: LookupTableSchema, dialect: DDLDialect = 'postgres'): string {
   const lines: string[] = [];
 
   lines.push(`CREATE TABLE IF NOT EXISTS "${table.tableName}" (`);
 
   const entries: string[] = [];
   for (const col of table.columns) {
-    entries.push(columnDDL(col));
+    entries.push(columnDDL(col, dialect));
   }
 
   if (table.compositePrimaryKey.length > 0) {
@@ -257,14 +334,14 @@ export function generateCreateLookupTable(table: LookupTableSchema): string {
 /**
  * Generate a `CREATE TABLE IF NOT EXISTS` statement for a global lookup table.
  */
-export function generateCreateGlobalLookupTable(table: GlobalLookupTableSchema): string {
+export function generateCreateGlobalLookupTable(table: GlobalLookupTableSchema, dialect: DDLDialect = 'postgres'): string {
   const lines: string[] = [];
 
   lines.push(`CREATE TABLE IF NOT EXISTS "${table.tableName}" (`);
 
   const entries: string[] = [];
   for (const col of table.columns) {
-    entries.push(columnDDL(col));
+    entries.push(columnDDL(col, dialect));
   }
 
   lines.push(entries.join(',\n'));
@@ -284,45 +361,49 @@ export function generateCreateGlobalLookupTable(table: GlobalLookupTableSchema):
  * @param schema - The complete schema definition.
  * @returns Array of SQL DDL statements.
  */
-export function generateSchemaDDL(schema: SchemaDefinition): string[] {
+export function generateSchemaDDL(schema: SchemaDefinition, dialect: DDLDialect = 'postgres'): string[] {
   const tableStatements: string[] = [];
   const indexStatements: string[] = [];
 
-  // Extensions required for trigram and btree_gin indexes (matches Medplum)
-  tableStatements.push('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
-  tableStatements.push('CREATE EXTENSION IF NOT EXISTS btree_gin;');
-
-  // Helper function used by trigram indexes on token text arrays (matches Medplum)
-  tableStatements.push(
-    `CREATE OR REPLACE FUNCTION token_array_to_text(arr text[]) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT array_to_string(arr, ' ') $$;`,
-  );
+  // PG-only extensions
+  if (dialect === 'postgres') {
+    tableStatements.push('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+    tableStatements.push('CREATE EXTENSION IF NOT EXISTS btree_gin;');
+    tableStatements.push(
+      `CREATE OR REPLACE FUNCTION token_array_to_text(arr text[]) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT array_to_string(arr, ' ') $$;`,
+    );
+  }
 
   // Global lookup tables first
   if (schema.globalLookupTables) {
     for (const lookup of schema.globalLookupTables) {
-      tableStatements.push(generateCreateGlobalLookupTable(lookup));
+      tableStatements.push(generateCreateGlobalLookupTable(lookup, dialect));
     }
     for (const lookup of schema.globalLookupTables) {
       for (const idx of lookup.indexes) {
-        indexStatements.push(generateCreateIndex(idx, lookup.tableName));
+        const sql = generateCreateIndex(idx, lookup.tableName, dialect);
+        if (sql) indexStatements.push(sql);
       }
     }
   }
 
   // Resource tables
   for (const tableSet of schema.tableSets) {
-    tableStatements.push(generateCreateMainTable(tableSet.main));
-    tableStatements.push(generateCreateHistoryTable(tableSet.history));
-    tableStatements.push(generateCreateReferencesTable(tableSet.references));
+    tableStatements.push(generateCreateMainTable(tableSet.main, dialect));
+    tableStatements.push(generateCreateHistoryTable(tableSet.history, dialect));
+    tableStatements.push(generateCreateReferencesTable(tableSet.references, dialect));
 
     for (const idx of tableSet.main.indexes) {
-      indexStatements.push(generateCreateIndex(idx, tableSet.main.tableName));
+      const sql = generateCreateIndex(idx, tableSet.main.tableName, dialect);
+      if (sql) indexStatements.push(sql);
     }
     for (const idx of tableSet.history.indexes) {
-      indexStatements.push(generateCreateIndex(idx, tableSet.history.tableName));
+      const sql = generateCreateIndex(idx, tableSet.history.tableName, dialect);
+      if (sql) indexStatements.push(sql);
     }
     for (const idx of tableSet.references.indexes) {
-      indexStatements.push(generateCreateIndex(idx, tableSet.references.tableName));
+      const sql = generateCreateIndex(idx, tableSet.references.tableName, dialect);
+      if (sql) indexStatements.push(sql);
     }
   }
 
@@ -335,10 +416,11 @@ export function generateSchemaDDL(schema: SchemaDefinition): string[] {
  *
  * Includes a header comment with version and generation timestamp.
  */
-export function generateSchemaDDLString(schema: SchemaDefinition): string {
+export function generateSchemaDDLString(schema: SchemaDefinition, dialect: DDLDialect = 'postgres'): string {
   const header = [
     `-- MedXAI FHIR Schema DDL`,
     `-- Version: ${schema.version}`,
+    `-- Dialect: ${dialect}`,
     `-- Generated: ${schema.generatedAt}`,
     `-- Resource types: ${schema.tableSets.length}`,
     `--`,
@@ -346,6 +428,6 @@ export function generateSchemaDDLString(schema: SchemaDefinition): string {
     '',
   ].join('\n');
 
-  const statements = generateSchemaDDL(schema);
+  const statements = generateSchemaDDL(schema, dialect);
   return header + statements.join('\n\n') + '\n';
 }

@@ -44,26 +44,31 @@ import type { SearchParameterImpl } from '../registry/search-parameter-registry.
 
 /**
  * Fixed columns present on every main resource table.
- * Matches Medplum's `buildCreateTables()` fixed columns.
+ *
+ * v2 changes:
+ * - Removed `projectId` (no multi-tenancy)
+ * - Removed `__version` (schema version, not resource version)
+ * - Added `versionId` (UUID for ETag / optimistic locking)
+ * - Changed `deleted` from BOOLEAN to INTEGER (SQLite compat)
+ * - Changed `lastUpdated` from TIMESTAMPTZ to TEXT (dialect-neutral; DDL maps to TIMESTAMPTZ for PG)
+ * - Token columns: UUID[] → TEXT[], removed Text middle column (2-col: __X + __XSort)
+ * - compartments: UUID[] → TEXT (JSON array)
  */
 function buildFixedMainColumns(): ColumnSchema[] {
   return [
-    { name: 'id', type: 'UUID', notNull: true, primaryKey: true },
-    { name: 'content', type: 'TEXT', notNull: true, primaryKey: false },
-    { name: 'lastUpdated', type: 'TIMESTAMPTZ', notNull: true, primaryKey: false },
-    { name: 'deleted', type: 'BOOLEAN', notNull: true, primaryKey: false, defaultValue: 'false' },
-    { name: 'projectId', type: 'UUID', notNull: true, primaryKey: false },
-    { name: '__version', type: 'INTEGER', notNull: true, primaryKey: false },
-    { name: '_source', type: 'TEXT', notNull: false, primaryKey: false },
-    { name: '_profile', type: 'TEXT[]', notNull: false, primaryKey: false },
-    // Metadata token columns — _tag (meta.tag) — triple-underscore matches Medplum
-    { name: '___tag', type: 'UUID[]', notNull: false, primaryKey: false },
-    { name: '___tagText', type: 'TEXT[]', notNull: false, primaryKey: false },
-    { name: '___tagSort', type: 'TEXT', notNull: false, primaryKey: false },
-    // Metadata token columns — _security (meta.security) — triple-underscore matches Medplum
-    { name: '___security', type: 'UUID[]', notNull: false, primaryKey: false },
-    { name: '___securityText', type: 'TEXT[]', notNull: false, primaryKey: false },
-    { name: '___securitySort', type: 'TEXT', notNull: false, primaryKey: false },
+    { name: 'id', type: 'TEXT', notNull: true, primaryKey: true, strategy: 'skip' },
+    { name: 'versionId', type: 'TEXT', notNull: true, primaryKey: false, strategy: 'skip' },
+    { name: 'content', type: 'TEXT', notNull: true, primaryKey: false, strategy: 'skip' },
+    { name: 'lastUpdated', type: 'TEXT', notNull: true, primaryKey: false, strategy: 'skip' },
+    { name: 'deleted', type: 'INTEGER', notNull: true, primaryKey: false, defaultValue: '0', strategy: 'skip' },
+    { name: '_source', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'skip' },
+    { name: '_profile', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'skip' },  // JSON array
+    // Metadata token columns — _tag (meta.tag) — 2-col: TEXT[] + Sort TEXT
+    { name: '___tag', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'token-column', searchParamCode: '_tag' },
+    { name: '___tagSort', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'token-column' },
+    // Metadata token columns — _security (meta.security) — 2-col: TEXT[] + Sort TEXT
+    { name: '___security', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'token-column', searchParamCode: '_security' },
+    { name: '___securitySort', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'token-column' },
   ];
 }
 
@@ -71,7 +76,7 @@ function buildFixedMainColumns(): ColumnSchema[] {
  * The `compartments` column — present on all resources except Binary.
  */
 function buildCompartmentsColumn(): ColumnSchema {
-  return { name: 'compartments', type: 'UUID[]', notNull: true, primaryKey: false };
+  return { name: 'compartments', type: 'TEXT', notNull: false, primaryKey: false, strategy: 'skip' };
 }
 
 /**
@@ -79,10 +84,12 @@ function buildCompartmentsColumn(): ColumnSchema {
  */
 function buildHistoryColumns(): ColumnSchema[] {
   return [
-    { name: 'versionId', type: 'UUID', notNull: true, primaryKey: true },
-    { name: 'id', type: 'UUID', notNull: true, primaryKey: false },
+    { name: 'versionSeq', type: 'INTEGER', notNull: true, primaryKey: true },  // AUTOINCREMENT in DDL
+    { name: 'id', type: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'versionId', type: 'TEXT', notNull: true, primaryKey: false },
     { name: 'content', type: 'TEXT', notNull: true, primaryKey: false },
-    { name: 'lastUpdated', type: 'TIMESTAMPTZ', notNull: true, primaryKey: false },
+    { name: 'lastUpdated', type: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'deleted', type: 'INTEGER', notNull: true, primaryKey: false, defaultValue: '0' },
   ];
 }
 
@@ -91,9 +98,11 @@ function buildHistoryColumns(): ColumnSchema[] {
  */
 function buildReferencesColumns(): ColumnSchema[] {
   return [
-    { name: 'resourceId', type: 'UUID', notNull: true, primaryKey: false },
-    { name: 'targetId', type: 'UUID', notNull: true, primaryKey: false },
+    { name: 'resourceId', type: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'targetType', type: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'targetId', type: 'TEXT', notNull: true, primaryKey: false },
     { name: 'code', type: 'TEXT', notNull: true, primaryKey: false },
+    { name: 'referenceRaw', type: 'TEXT', notNull: false, primaryKey: false },
   ];
 }
 
@@ -105,22 +114,10 @@ function buildReferencesColumns(): ColumnSchema[] {
  * Fixed indexes for the main table.
  */
 function buildFixedMainIndexes(resourceType: string): IndexSchema[] {
-  const indexes: IndexSchema[] = [
+  return [
     {
       name: `${resourceType}_lastUpdated_idx`,
       columns: ['lastUpdated'],
-      indexType: 'btree',
-      unique: false,
-    },
-    {
-      name: `${resourceType}_projectId_lastUpdated_idx`,
-      columns: ['projectId', 'lastUpdated'],
-      indexType: 'btree',
-      unique: false,
-    },
-    {
-      name: `${resourceType}_projectId_idx`,
-      columns: ['projectId'],
       indexType: 'btree',
       unique: false,
     },
@@ -130,28 +127,7 @@ function buildFixedMainIndexes(resourceType: string): IndexSchema[] {
       indexType: 'btree',
       unique: false,
     },
-    {
-      name: `${resourceType}_profile_idx`,
-      columns: ['_profile'],
-      indexType: 'gin',
-      unique: false,
-    },
-    {
-      name: `${resourceType}___version_idx`,
-      columns: ['__version'],
-      indexType: 'btree',
-      unique: false,
-    },
-    {
-      name: `${resourceType}_reindex_idx`,
-      columns: ['lastUpdated', '__version'],
-      indexType: 'btree',
-      unique: false,
-      where: 'deleted = false',
-    },
   ];
-
-  return indexes;
 }
 
 /**
@@ -172,14 +148,8 @@ function buildCompartmentsIndex(resourceType: string): IndexSchema {
 function buildHistoryIndexes(resourceType: string): IndexSchema[] {
   return [
     {
-      name: `${resourceType}_History_id_idx`,
-      columns: ['id'],
-      indexType: 'btree',
-      unique: false,
-    },
-    {
-      name: `${resourceType}_History_lastUpdated_idx`,
-      columns: ['lastUpdated'],
+      name: `${resourceType}_History_id_seq_idx`,
+      columns: ['id', 'versionSeq'],
       indexType: 'btree',
       unique: false,
     },
@@ -192,11 +162,16 @@ function buildHistoryIndexes(resourceType: string): IndexSchema[] {
 function buildReferencesIndexes(resourceType: string): IndexSchema[] {
   return [
     {
-      name: `${resourceType}_References_targetId_code_idx`,
-      columns: ['targetId', 'code'],
+      name: `${resourceType}_References_target_idx`,
+      columns: ['targetType', 'targetId', 'code'],
       indexType: 'btree',
       unique: false,
-      include: ['resourceId'],
+    },
+    {
+      name: `${resourceType}_References_resourceId_idx`,
+      columns: ['resourceId'],
+      indexType: 'btree',
+      unique: false,
     },
   ];
 }
@@ -224,24 +199,17 @@ function buildSearchColumns(impls: SearchParameterImpl[]): ColumnSchema[] {
         break;
 
       case 'token-column':
-        // Three columns per token param:
-        // __code UUID[] — token hash array
-        // __codeText TEXT[] — display text array
-        // __codeSort TEXT — sort value
+        // v2: Two columns per token param (not three):
+        // __code TEXT (JSON array of "system|code" strings in SQLite, TEXT[] in PG)
+        // __codeSort TEXT — display text for :text modifier
         columns.push(
           {
             name: `__${impl.columnName}`,
-            type: 'UUID[]',
+            type: 'TEXT',
             notNull: false,
             primaryKey: false,
             searchParamCode: impl.code,
-          },
-          {
-            name: `__${impl.columnName}Text`,
-            type: 'TEXT[]',
-            notNull: false,
-            primaryKey: false,
-            searchParamCode: impl.code,
+            strategy: 'token-column',
           },
           {
             name: `__${impl.columnName}Sort`,
@@ -249,6 +217,7 @@ function buildSearchColumns(impls: SearchParameterImpl[]): ColumnSchema[] {
             notNull: false,
             primaryKey: false,
             searchParamCode: impl.code,
+            strategy: 'token-column',
           },
         );
         break;
@@ -289,11 +258,11 @@ function buildSearchIndexes(resourceType: string, impls: SearchParameterImpl[]):
       }
 
       case 'token-column':
-        // gin index on the UUID[] hash column
+        // v2: btree index on token column (GIN only for PG TEXT[])
         indexes.push({
           name: `${resourceType}___${impl.columnName}_idx`,
           columns: [`__${impl.columnName}`],
-          indexType: 'gin',
+          indexType: 'btree',
           unique: false,
         });
         break;
@@ -344,7 +313,8 @@ function buildHumanNameTable(): GlobalLookupTableSchema {
   return {
     tableName,
     columns: [
-      { name: 'resourceId', type: 'UUID', notNull: true, primaryKey: false },
+      { name: 'resourceId', type: 'TEXT', notNull: true, primaryKey: false },
+      { name: 'resourceType', type: 'TEXT', notNull: true, primaryKey: false },
       { name: 'name', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'given', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'family', type: 'TEXT', notNull: false, primaryKey: false },
@@ -369,7 +339,8 @@ function buildAddressTable(): GlobalLookupTableSchema {
   return {
     tableName,
     columns: [
-      { name: 'resourceId', type: 'UUID', notNull: true, primaryKey: false },
+      { name: 'resourceId', type: 'TEXT', notNull: true, primaryKey: false },
+      { name: 'resourceType', type: 'TEXT', notNull: true, primaryKey: false },
       { name: 'address', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'city', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'country', type: 'TEXT', notNull: false, primaryKey: false },
@@ -400,7 +371,8 @@ function buildContactPointTable(): GlobalLookupTableSchema {
   return {
     tableName,
     columns: [
-      { name: 'resourceId', type: 'UUID', notNull: true, primaryKey: false },
+      { name: 'resourceId', type: 'TEXT', notNull: true, primaryKey: false },
+      { name: 'resourceType', type: 'TEXT', notNull: true, primaryKey: false },
       { name: 'system', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'value', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'use', type: 'TEXT', notNull: false, primaryKey: false },
@@ -418,7 +390,8 @@ function buildIdentifierTable(): GlobalLookupTableSchema {
   return {
     tableName,
     columns: [
-      { name: 'resourceId', type: 'UUID', notNull: true, primaryKey: false },
+      { name: 'resourceId', type: 'TEXT', notNull: true, primaryKey: false },
+      { name: 'resourceType', type: 'TEXT', notNull: true, primaryKey: false },
       { name: 'system', type: 'TEXT', notNull: false, primaryKey: false },
       { name: 'value', type: 'TEXT', notNull: false, primaryKey: false },
     ],
@@ -434,30 +407,21 @@ function buildIdentifierTable(): GlobalLookupTableSchema {
 // =============================================================================
 
 /**
- * Build shared token columns: `__sharedTokens UUID[]`, `__sharedTokensText TEXT[]`.
+ * v2: Shared token columns removed.
+ * In v2, each token column stores "system|code" strings directly.
+ * No need for a unified shared token column.
  *
- * These aggregate token values from `_tag`, `_security`, and `identifier`
- * for unified token search.
+ * @deprecated Kept as empty function for backward compatibility.
  */
 function buildSharedTokenColumns(): ColumnSchema[] {
-  return [
-    { name: '__sharedTokens', type: 'UUID[]', notNull: false, primaryKey: false },
-    { name: '__sharedTokensText', type: 'TEXT[]', notNull: false, primaryKey: false },
-  ];
+  return [];
 }
 
 /**
- * Build shared token indexes.
+ * @deprecated Shared token indexes removed in v2.
  */
-function buildSharedTokenIndexes(resourceType: string): IndexSchema[] {
-  return [
-    {
-      name: `${resourceType}___sharedTokens_idx`,
-      columns: ['__sharedTokens'],
-      indexType: 'gin',
-      unique: false,
-    },
-  ];
+function buildSharedTokenIndexes(_resourceType: string): IndexSchema[] {
+  return [];
 }
 
 // =============================================================================
@@ -465,44 +429,15 @@ function buildSharedTokenIndexes(resourceType: string): IndexSchema[] {
 // =============================================================================
 
 /**
- * Build trigram (pg_trgm) GIN indexes on token text columns.
- *
- * These enable fast substring/contains search on token text arrays.
+ * v2: Trigram indexes simplified.
+ * In v2, token columns store "system|code" strings directly in TEXT/TEXT[].
+ * Trigram indexes are only needed for PG TEXT[] columns.
+ * For SQLite, these are skipped (no GIN support).
  */
-function buildTrigramIndexes(resourceType: string, impls: SearchParameterImpl[]): IndexSchema[] {
-  const indexes: IndexSchema[] = [];
-
-  // Trigram on token-column text arrays using token_array_to_text() — matches Medplum
-  for (const impl of impls) {
-    if (impl.strategy !== 'token-column') continue;
-    indexes.push({
-      name: `${resourceType}___${impl.columnName}Text_trgm_idx`,
-      columns: [`__${impl.columnName}Text`],
-      indexType: 'gin',
-      unique: false,
-      expression: `token_array_to_text("__${impl.columnName}Text") gin_trgm_ops`,
-    });
-  }
-
-  // Trigram on fixed metadata token text columns (triple underscore) — matches Medplum
-  indexes.push(
-    {
-      name: `${resourceType}____tagText_trgm_idx`,
-      columns: ['___tagText'],
-      indexType: 'gin',
-      unique: false,
-      expression: `token_array_to_text("___tagText") gin_trgm_ops`,
-    },
-    {
-      name: `${resourceType}___sharedTokensText_trgm_idx`,
-      columns: ['__sharedTokensText'],
-      indexType: 'gin',
-      unique: false,
-      expression: `token_array_to_text("__sharedTokensText") gin_trgm_ops`,
-    },
-  );
-
-  return indexes;
+function buildTrigramIndexes(_resourceType: string, _impls: SearchParameterImpl[]): IndexSchema[] {
+  // v2: Trigram indexes are PG-only and will be added by PostgresDialect
+  // in the DDL generation phase, not in the schema builder.
+  return [];
 }
 
 // =============================================================================
@@ -583,14 +518,22 @@ export function buildResourceTableSet(
     resourceType,
     columns: buildReferencesColumns(),
     indexes: buildReferencesIndexes(resourceType),
-    compositePrimaryKey: ['resourceId', 'targetId', 'code'],
+    compositePrimaryKey: ['resourceId', 'targetType', 'targetId', 'code'],
   };
+
+  // v2: Preserve SP metadata for SchemaDiff
+  const searchParamsMeta = searchImpls.map(impl => ({
+    code: impl.code,
+    type: impl.type,
+    expression: impl.expression,
+  }));
 
   return {
     resourceType,
     main,
     history,
     references,
+    searchParams: searchParamsMeta,
   };
 }
 

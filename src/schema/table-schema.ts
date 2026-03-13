@@ -23,10 +23,13 @@
 // =============================================================================
 
 /**
- * PostgreSQL column types used in FHIR resource tables.
+ * SQL column types used in FHIR resource tables.
+ *
+ * v2: Removed UUID / UUID[]. Token columns now use TEXT / TEXT[].
+ * PostgreSQL-specific types (TIMESTAMPTZ, TEXT[]) are still here
+ * for PG DDL generation. SQLite adapter maps them to TEXT.
  */
 export type SqlColumnType =
-  | 'UUID'
   | 'TEXT'
   | 'TEXT[]'
   | 'BOOLEAN'
@@ -39,20 +42,23 @@ export type SqlColumnType =
   | 'NUMERIC'
   | 'DOUBLE PRECISION'
   | 'DOUBLE PRECISION[]'
-  | 'UUID[]';
+  | 'REAL';
 
 // =============================================================================
 // Section 2: Column Schema
 // =============================================================================
 
 /**
- * Definition of a single PostgreSQL column.
+ * Definition of a single database column.
+ *
+ * v2: Dialect-neutral. DDLGenerator maps types to dialect-specific
+ * equivalents (e.g., BOOLEAN → INTEGER for SQLite).
  */
 export interface ColumnSchema {
   /** Column name (e.g., `id`, `content`, `birthdate`). */
   name: string;
 
-  /** PostgreSQL data type. */
+  /** Logical SQL data type (mapped to dialect-specific type in DDL). */
   type: SqlColumnType;
 
   /** Whether the column has a NOT NULL constraint. */
@@ -61,7 +67,7 @@ export interface ColumnSchema {
   /** Whether this column is the primary key. */
   primaryKey: boolean;
 
-  /** SQL default value expression (e.g., `'false'`). */
+  /** SQL default value expression (e.g., `'false'`, `'0'`). */
   defaultValue?: string;
 
   /** Source FHIRPath expression (documentation only). */
@@ -69,6 +75,12 @@ export interface ColumnSchema {
 
   /** Source SearchParameter.code (documentation only). */
   searchParamCode?: string;
+
+  /**
+   * v2: Search parameter storage strategy.
+   * Enables SchemaDiff to understand column purpose.
+   */
+  strategy?: 'column' | 'token-column' | 'lookup-table' | 'skip';
 }
 
 // =============================================================================
@@ -253,6 +265,15 @@ export interface LookupTableSchema {
 // =============================================================================
 
 /**
+ * Metadata for a search parameter, preserved for SchemaDiff.
+ */
+export interface SearchParamMeta {
+  code: string;
+  type: string;
+  expression: string;
+}
+
+/**
  * Complete table set for a single FHIR resource type.
  *
  * Contains 3 core tables (main, history, references).
@@ -271,6 +292,11 @@ export interface ResourceTableSet {
 
   /** References table (outgoing references). */
   references: ReferencesTableSchema;
+
+  /**
+   * v2: Raw SP metadata for SchemaDiff to compare old vs new search params.
+   */
+  searchParams?: SearchParamMeta[];
 
   /**
    * @deprecated Per-resource lookup tables removed. Use SchemaDefinition.globalLookupTables.

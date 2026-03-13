@@ -14,4 +14,9 @@ export type {
   ReferencesTableSchema,
   ResourceTableSet,
   SchemaDefinition,
+  SearchParamMeta,
+  GlobalLookupTableSchema,
+  LookupTableType,
 } from './table-schema.js';
+
+export type { DDLDialect } from './ddl-generator.js';
