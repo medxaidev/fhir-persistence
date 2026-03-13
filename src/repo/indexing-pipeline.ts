@@ -30,6 +30,8 @@ import type { ReferenceRowV2 } from './reference-indexer.js';
 import { extractReferencesV2 } from './reference-indexer.js';
 import { buildDeleteReferencesSQLv2, buildInsertReferencesSQLv2 } from './sql-builder.js';
 import { LookupTableWriter } from './lookup-table-writer.js';
+import type { RuntimeProvider } from '../providers/runtime-provider.js';
+import type { SearchParameterDef } from '../providers/definition-provider.js';
 
 // =============================================================================
 // Section 1: Types
@@ -55,6 +57,8 @@ export interface IndexingPipelineOptions {
   enableLookupTables?: boolean;
   /** Enable reference indexing (default: true). */
   enableReferences?: boolean;
+  /** Optional RuntimeProvider for FHIRPath-driven extraction (B3). */
+  runtimeProvider?: RuntimeProvider;
 }
 
 // =============================================================================
@@ -63,13 +67,15 @@ export interface IndexingPipelineOptions {
 
 export class IndexingPipeline {
   private readonly lookupWriter: LookupTableWriter;
-  private readonly options: Required<IndexingPipelineOptions>;
+  private readonly options: Required<Omit<IndexingPipelineOptions, 'runtimeProvider'>>;
+  private readonly runtimeProvider: RuntimeProvider | undefined;
 
   constructor(
     private readonly adapter: StorageAdapter,
     options?: IndexingPipelineOptions,
   ) {
     this.lookupWriter = new LookupTableWriter(adapter);
+    this.runtimeProvider = options?.runtimeProvider;
     this.options = {
       enableLookupTables: options?.enableLookupTables ?? true,
       enableReferences: options?.enableReferences ?? true,
@@ -99,7 +105,9 @@ export class IndexingPipeline {
     }
 
     // 1. Extract search column values (returned, not written)
-    const searchColumns = buildSearchColumns(resource, impls);
+    const searchColumns = this.runtimeProvider
+      ? this.extractViaRuntime(resource, impls)
+      : buildSearchColumns(resource, impls);
 
     // 2. Write references (replace strategy)
     let referenceCount = 0;
@@ -151,7 +159,9 @@ export class IndexingPipeline {
     resource: FhirResource,
     impls: SearchParameterImpl[],
   ): SearchColumnValues {
-    return buildSearchColumns(resource, impls);
+    return this.runtimeProvider
+      ? this.extractViaRuntime(resource, impls)
+      : buildSearchColumns(resource, impls);
   }
 
   /**
@@ -162,7 +172,9 @@ export class IndexingPipeline {
     resource: FhirResource,
     impls: SearchParameterImpl[],
   ): ReferenceRowV2[] {
-    return extractReferencesV2(resource, impls);
+    return this.runtimeProvider
+      ? this.extractRefsViaRuntime(resource, impls)
+      : extractReferencesV2(resource, impls);
   }
 
   /**
@@ -204,8 +216,10 @@ export class IndexingPipeline {
     const delSQL = buildDeleteReferencesSQLv2(tableName);
     await this.adapter.execute(delSQL, [resourceId]);
 
-    // Extract new references
-    const refs = extractReferencesV2(resource, impls);
+    // Extract new references (prefer RuntimeProvider if available)
+    const refs = this.runtimeProvider
+      ? this.extractRefsViaRuntime(resource, impls)
+      : extractReferencesV2(resource, impls);
     if (refs.length === 0) return 0;
 
     // Insert new references
@@ -231,5 +245,91 @@ export class IndexingPipeline {
     const rows = buildLookupTableRows(resource as FhirResource & { id: string }, impls);
     await this.lookupWriter.writeRows(resourceId, rows);
     return rows.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private: RuntimeProvider-based extraction (B3)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Convert SearchParameterImpl[] to SearchParameterDef[] for RuntimeProvider.
+   */
+  private implsToDefs(impls: SearchParameterImpl[]): SearchParameterDef[] {
+    return impls.map(impl => ({
+      resourceType: 'SearchParameter' as const,
+      code: impl.code,
+      type: impl.type,
+      base: impl.resourceTypes,
+      expression: impl.expression,
+    }));
+  }
+
+  /**
+   * Extract search column values via RuntimeProvider.
+   */
+  private extractViaRuntime(
+    resource: FhirResource,
+    impls: SearchParameterImpl[],
+  ): SearchColumnValues {
+    const defs = this.implsToDefs(impls);
+    const raw = this.runtimeProvider!.extractSearchValues(
+      resource as Record<string, unknown>,
+      defs,
+    );
+
+    // Map RuntimeProvider output to SearchColumnValues keyed by columnName
+    const columns: SearchColumnValues = {};
+    for (const impl of impls) {
+      const values = raw[impl.code];
+      if (!values || values.length === 0) continue;
+
+      // Map to the correct DDL column names per strategy
+      switch (impl.strategy) {
+        case 'column':
+          columns[impl.columnName] = values.length === 1 ? values[0] : values;
+          break;
+        case 'token-column': {
+          // v2 DDL: __<name> TEXT (JSON array), __<name>Sort TEXT
+          columns[`__${impl.columnName}`] = JSON.stringify(values);
+          // Sort column — first token value as display text
+          const sortVal = typeof values[0] === 'string' ? values[0] : String(values[0]);
+          columns[`__${impl.columnName}Sort`] = sortVal;
+          break;
+        }
+        case 'lookup-table':
+          // v2 DDL: __<name>Sort TEXT
+          if (typeof values[0] === 'string') {
+            columns[`__${impl.columnName}Sort`] = values[0];
+          }
+          break;
+      }
+    }
+
+    return columns;
+  }
+
+  /**
+   * Extract references via RuntimeProvider → ReferenceRowV2[].
+   */
+  private extractRefsViaRuntime(
+    resource: FhirResource,
+    impls: SearchParameterImpl[],
+  ): ReferenceRowV2[] {
+    const resourceId = resource.id;
+    if (!resourceId) return [];
+
+    const refDefs = this.implsToDefs(impls.filter(i => i.type === 'reference'));
+    const extracted = this.runtimeProvider!.extractReferences(
+      resource as Record<string, unknown>,
+      refDefs,
+    );
+
+    return extracted.map(ref => ({
+      resourceId,
+      targetType: ref.targetType,
+      targetId: ref.targetId,
+      code: ref.code,
+      referenceRaw: ref.reference,
+    }));
   }
 }

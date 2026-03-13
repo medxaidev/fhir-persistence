@@ -1206,12 +1206,13 @@ function buildChainedFragmentV2(
     `  JOIN "${chain.targetType}" __target ON __ref."targetId" = __target."id"`,
     `  WHERE __ref."resourceId" = "${sourceResourceType}"."id"`,
     `    AND __ref."code" = ?`,
+    `    AND __ref."targetType" = ?`,
     `    AND __target."deleted" = 0`,
     `    AND ${innerSql}`,
     `)`,
   ].join('\n');
 
-  return { sql, values: [param.code, ...innerFragment.values] };
+  return { sql, values: [param.code, chain.targetType, ...innerFragment.values] };
 }
 
 /**

@@ -64,10 +64,12 @@ describe('Chain Search V2', () => {
     expect(result!.sql).toContain('Observation_References');
     expect(result!.sql).toContain('JOIN "Patient"');
     expect(result!.sql).toContain('__ref."code" = ?');
+    expect(result!.sql).toContain('__ref."targetType" = ?');
     expect(result!.sql).toContain('__target."deleted" = 0');
-    // Values: first is the reference code 'subject', second is the search value
+    // Values: code, targetType, then search value
     expect(result!.values[0]).toBe('subject');
-    expect(result!.values[1]).toBe('1990-01-15');
+    expect(result!.values[1]).toBe('Patient');
+    expect(result!.values[2]).toBe('1990-01-15');
   });
 
   it('builds EXISTS subquery for subject:Patient.active (token)', () => {
@@ -84,6 +86,7 @@ describe('Chain Search V2', () => {
     expect(result!.sql).toContain('EXISTS');
     expect(result!.sql).toContain('json_each');
     expect(result!.values[0]).toBe('subject');
+    expect(result!.values[1]).toBe('Patient');
   });
 
   it('combines chain search with regular params', () => {
