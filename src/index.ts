@@ -22,6 +22,7 @@ export type {
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 export { StructureDefinitionRegistry } from './registry/index.js';
+export type { CanonicalProfile } from './registry/index.js';
 export { SearchParameterRegistry } from './registry/index.js';
 export type {
   SearchParamType,
@@ -45,19 +46,10 @@ export {
   generateCreateHistoryTable,
   generateCreateReferencesTable,
   generateCreateIndex,
-  // @deprecated — use generateResourceDDLv2 instead
   generateResourceDDL,
-  // @deprecated — use generateSchemaDDLv2 instead
   generateSchemaDDL,
-  // @deprecated — use generateSchemaDDLStringv2 instead
   generateSchemaDDLString,
 } from './schema/ddl-generator.js';
-
-// ─── Database ───────────────────────────────────────────────────────────────
-export type { DatabaseConfig } from './db/index.js';
-export { loadDatabaseConfig } from './db/index.js';
-// @deprecated — use SQLiteAdapter or PostgresAdapter via StorageAdapter interface instead
-export { DatabaseClient } from './db/index.js';
 
 // ─── Repository ─────────────────────────────────────────────────────────────
 export type {
@@ -89,8 +81,6 @@ export {
   ResourceGoneError,
   ResourceVersionConflictError,
 } from './repo/index.js';
-// @deprecated — use FhirPersistence (end-to-end with indexing) or FhirStore (basic CRUD) instead
-export { FhirRepository } from './repo/index.js';
 export { buildHistoryBundle } from './repo/index.js';
 export type { SearchColumnValues } from './repo/index.js';
 export {
@@ -127,75 +117,44 @@ export {
   extractPrefix,
   parseSortParam,
   prefixToOperator,
-  // @deprecated — use buildWhereFragmentV2 (? placeholders) instead
-  buildWhereFragment,
-  // @deprecated — use buildWhereClauseV2 (? placeholders, chain search) instead
-  buildWhereClause,
-  // @deprecated — use buildSearchSQLv2 (? placeholders, no projectId) instead
-  buildSearchSQL,
-  // @deprecated — use buildCountSQLv2 (? placeholders) instead
-  buildCountSQL,
   buildSearchBundle,
   buildSelfLink,
   buildNextLink,
   hasNextPage,
   buildPaginationContext,
-  executeSearch,
-  mapRowsToResources,
+  executeSearchV2 as executeSearch,
+  mapRowsToResourcesV2 as mapRowsToResources,
 } from './search/index.js';
 
-// ─── Bundle Processor ────────────────────────────────────────────────────────
-export type {
-  BundleEntry,
-  PersistenceBundle,
-  BundleResponseEntry,
-  BundleResponse,
-} from './repo/index.js';
-/** @deprecated Use BundleProcessorV2 (via FhirPersistence) instead. */
-export { processTransaction, processBatch } from './repo/index.js';
-
-// ─── Migrations ─────────────────────────────────────────────────────────────
-/** @deprecated Use {@link MigrationRunnerV2} (StorageAdapter-based) instead. */
-export { MigrationRunner } from './migrations/index.js';
-export type {
-  Migration,
-  MigrationRecord,
-  MigrationResult,
-  MigrationStatus,
-} from './migrations/index.js';
-
-// ─── v2: Storage Adapter ────────────────────────────────────────────────────
+// ─── Storage Adapter ────────────────────────────────────────────────────────
 export type { StorageAdapter, TransactionContext } from './db/adapter.js';
 export { SQLiteAdapter } from './db/sqlite-adapter.js';
+export { BetterSqlite3Adapter } from './db/better-sqlite3-adapter.js';
+export type { BetterSqlite3Options } from './db/better-sqlite3-adapter.js';
 
-// ─── v2: FhirStore (basic CRUD) ─────────────────────────────────────────────
+// ─── FhirStore (basic CRUD) ─────────────────────────────────────────────────
 export { FhirStore } from './store/fhir-store.js';
 
-// ─── v2: FhirPersistence (end-to-end facade with indexing) ──────────────────
+// ─── FhirPersistence (end-to-end facade with indexing) ──────────────────────
 export { FhirPersistence } from './store/fhir-persistence.js';
-export type {
-  FhirPersistenceOptions,
-} from './store/fhir-persistence.js';
+export type { FhirPersistenceOptions } from './store/fhir-persistence.js';
 
-// ─── v2: Indexing Pipeline ──────────────────────────────────────────────────
+// ─── Indexing Pipeline ──────────────────────────────────────────────────────
 export { IndexingPipeline } from './repo/indexing-pipeline.js';
-export type {
-  IndexResult,
-  IndexingPipelineOptions,
-} from './repo/indexing-pipeline.js';
+export type { IndexResult, IndexingPipelineOptions } from './repo/indexing-pipeline.js';
 
-// ─── v2: Lookup Table Writer ────────────────────────────────────────────────
+// ─── Lookup Table Writer ────────────────────────────────────────────────────
 export { LookupTableWriter } from './repo/lookup-table-writer.js';
 
-// ─── v2: Reference Indexer ──────────────────────────────────────────────────
+// ─── Reference Indexer ──────────────────────────────────────────────────────
 export type { ReferenceRowV2 } from './repo/reference-indexer.js';
 export { extractReferencesV2 } from './repo/reference-indexer.js';
 
-// ─── v2: Lookup Table Rows ──────────────────────────────────────────────────
+// ─── Lookup Table Rows ──────────────────────────────────────────────────────
 export type { LookupTableRow } from './repo/row-indexer.js';
 export { buildLookupTableRows } from './repo/row-indexer.js';
 
-// ─── v2: SQL Builders ──────────────────────────────────────────────────────
+// ─── SQL Builders ──────────────────────────────────────────────────────────
 export {
   buildInsertMainSQLv2,
   buildUpdateMainSQLv2,
@@ -208,7 +167,7 @@ export {
   buildTypeHistorySQLv2,
 } from './repo/sql-builder.js';
 
-// ─── v2: Migration Engine ───────────────────────────────────────────────────
+// ─── Migration Engine ───────────────────────────────────────────────────────
 export type { SchemaDelta, DeltaKind } from './migration/schema-diff.js';
 export { compareSchemas } from './migration/schema-diff.js';
 export type { GeneratedMigration } from './migration/migration-generator.js';
@@ -216,36 +175,34 @@ export { generateMigration } from './migration/migration-generator.js';
 export { PackageRegistryRepo } from './registry/package-registry-repo.js';
 export { IGPersistenceManager } from './migration/ig-persistence-manager.js';
 export { ReindexScheduler } from './migration/reindex-scheduler.js';
+export { MigrationRunnerV2 } from './migrations/index.js';
+export type { MigrationV2, MigrationResultV2 } from './migrations/index.js';
 
-// ─── v2: Terminology ────────────────────────────────────────────────────────
+// ─── Terminology ────────────────────────────────────────────────────────────
 export { TerminologyCodeRepo } from './terminology/terminology-code-repo.js';
 export { ValueSetRepo } from './terminology/valueset-repo.js';
 
-// ─── v2: Platform IG ────────────────────────────────────────────────────────
+// ─── Platform IG ────────────────────────────────────────────────────────────
 export { PLATFORM_SEARCH_PARAMETERS, PLATFORM_PACKAGE_NAME, PLATFORM_PACKAGE_VERSION } from './platform/platform-ig-definitions.js';
 export { buildPlatformTableSets, initializePlatformIG } from './platform/platform-ig-loader.js';
 
-// ─── v2: Search Enhancement (Phase B) ──────────────────────────────────────
+// ─── Search Enhancement ────────────────────────────────────────────────────
 export { buildWhereFragmentV2, buildWhereClauseV2 } from './search/where-builder.js';
 export { buildSearchSQLv2, buildCountSQLv2, buildTwoPhaseSearchSQLv2 } from './search/search-sql-builder.js';
 export type { TwoPhaseSearchSQL } from './search/search-sql-builder.js';
 export type { SearchPlan, SearchPlannerOptions } from './search/search-planner.js';
 export { planSearch } from './search/search-planner.js';
 
-// ─── v2: Production Hardening ───────────────────────────────────────────────
+// ─── Production Hardening ───────────────────────────────────────────────────
 export { ResourceCacheV2 } from './cache/resource-cache.js';
 export { SearchLogger } from './observability/search-logger.js';
 export { reindexResourceTypeV2, reindexAllV2 } from './cli/reindex.js';
 
-// ─── v2: FhirSystem (startup orchestrator for fhir-engine) ──────────────────
+// ─── FhirSystem (startup orchestrator for fhir-engine) ──────────────────────
 export { FhirSystem } from './startup/fhir-system.js';
 export type { FhirSystemOptions, FhirSystemReady } from './startup/fhir-system.js';
 
-// ─── v2: BetterSqlite3Adapter (native SQLite, production recommended) ───────
-export { BetterSqlite3Adapter } from './db/better-sqlite3-adapter.js';
-export type { BetterSqlite3Options } from './db/better-sqlite3-adapter.js';
-
-// ─── v2: Provider bridges (for fhir-engine integration) ─────────────────────
+// ─── Provider bridges (for fhir-engine integration) ─────────────────────────
 export { FhirDefinitionBridge } from './providers/fhir-definition-provider.js';
 export { FhirRuntimeProvider, createFhirRuntimeProvider } from './providers/fhir-runtime-provider.js';
 export type { FhirRuntimeProviderOptions } from './providers/fhir-runtime-provider.js';

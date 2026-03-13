@@ -63,9 +63,9 @@ export {
   buildPaginationContext,
 } from './pagination.js';
 
-// Search Executor
+// Search Executor (v2)
 export type { SearchOptions, SearchResult } from './search-executor.js';
-export { executeSearch, mapRowsToResources } from './search-executor.js';
+export { executeSearchV2, mapRowsToResourcesV2 } from './search-executor.js';
 
 // v2: WHERE Builder (? placeholders, chain search)
 export {

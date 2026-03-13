@@ -1,13 +1,13 @@
 /**
- * Schema Migration Module
+ * Schema Migration Module (v2)
  *
  * @module fhir-persistence/migrations
  */
 
-export { MigrationRunner } from './migration-runner.js';
+export { MigrationRunnerV2 } from './migration-runner.js';
 export type {
-  Migration,
-  MigrationRecord,
-  MigrationResult,
-  MigrationStatus,
-} from './types.js';
+  MigrationV2,
+  MigrationRecordV2,
+  MigrationResultV2,
+  MigrationStatusV2,
+} from './migration-runner.js';

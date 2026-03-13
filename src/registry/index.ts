@@ -6,6 +6,7 @@
 
 // (Task 8.2) StructureDefinitionRegistry
 export { StructureDefinitionRegistry } from './structure-definition-registry.js';
+export type { CanonicalProfile } from './structure-definition-registry.js';
 
 // (Task 8.3) SearchParameterRegistry
 export { SearchParameterRegistry } from './search-parameter-registry.js';

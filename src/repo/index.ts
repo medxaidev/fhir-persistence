@@ -1,5 +1,5 @@
 /**
- * Repository module — Public API
+ * Repository module — Public API (v2)
  *
  * @module fhir-persistence/repo
  */
@@ -35,10 +35,6 @@ export {
   ResourceGoneError,
   ResourceVersionConflictError,
 } from './errors.js';
-
-// Implementation
-export { FhirRepository } from './fhir-repo.js';
-export type { TransactionClient } from './fhir-repo.js';
 
 // Builders (for advanced usage / testing)
 export {
@@ -81,12 +77,3 @@ export type {
   BuildHistoryBundleOptions,
 } from './history-bundle.js';
 export { buildHistoryBundle } from './history-bundle.js';
-
-// Bundle Processor
-export type {
-  BundleEntry,
-  Bundle as PersistenceBundle,
-  BundleResponseEntry,
-  BundleResponse,
-} from './bundle-processor.js';
-export { processTransaction, processBatch } from './bundle-processor.js';

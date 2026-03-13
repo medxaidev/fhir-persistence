@@ -132,14 +132,14 @@ describe('SearchParameterRegistry — Strategy Resolution', () => {
     expect(impl!.columnType).toBe('TEXT');
   });
 
-  it('token param → token-column strategy, UUID[] type, array=true', () => {
+  it('token param → token-column strategy, TEXT type, array=true', () => {
     registry.indexBundle(makeBundle([
       makeSP({ code: 'identifier', type: 'token', base: ['Patient'], expression: 'Patient.identifier' }),
     ]));
     const impl = registry.getImpl('Patient', 'identifier');
     expect(impl).toBeDefined();
     expect(impl!.strategy).toBe('token-column');
-    expect(impl!.columnType).toBe('UUID[]');
+    expect(impl!.columnType).toBe('TEXT');
     expect(impl!.array).toBe(true);
   });
 
