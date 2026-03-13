@@ -1,75 +1,138 @@
-# @medxai/fhir-persistence
+# fhir-persistence
 
-Embedded FHIR R4 persistence layer with SQLite and PostgreSQL support.
+Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migration over SQLite and PostgreSQL.
+
+[![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 ## Features
 
-- **StorageAdapter abstraction** — unified interface for SQLite (sql.js) and PostgreSQL
-- **3-table-per-resource pattern** — Main + History + References tables
+- **StorageAdapter abstraction** — unified async interface for SQLite and PostgreSQL
+- **Two SQLite adapters** — `BetterSqlite3Adapter` (native, production) + `SQLiteAdapter` (sql.js WASM, cross-platform)
+- **3-table-per-resource pattern** — Main + History + References tables per FHIR resource type
 - **Automatic search indexing** — column, token-column, and lookup-table strategies
+- **FHIRPath-driven extraction** — optional `RuntimeProvider` bridge for `fhir-runtime` powered indexing
 - **Chain search** — `subject:Patient.birthdate=1990-01-15`
+- **\_include / \_revinclude** — with recursive `_include:iterate` support (max depth 3)
 - **Search planner** — filter reordering, chain depth validation, two-phase SQL recommendation
 - **Two-phase SQL** — id-first query for large table performance
-- **IG-driven schema** — StructureDefinition + SearchParameter → DDL
+- **IG-driven schema** — StructureDefinition + SearchParameter → DDL (SQLite + PostgreSQL dialects)
 - **Migration engine** — SchemaDiff → MigrationGenerator → MigrationRunnerV2
-- **Platform IG** — built-in User/Bot/Project/Agent/ClientApplication resources
+- **Conditional operations** — conditionalCreate / conditionalUpdate / conditionalDelete
+- **Bundle processing** — transaction and batch bundle support
 - **Terminology** — TerminologyCodeRepo + ValueSetRepo
-- **Production hardening** — ResourceCacheV2, SearchLogger, ReindexCLI
+- **FhirSystem orchestrator** — end-to-end startup flow for `fhir-engine` integration
+- **Provider bridges** — `FhirDefinitionBridge` + `FhirRuntimeProvider` for `fhir-definition` / `fhir-runtime`
 
-## Quick Start (v2)
+## Install
+
+```bash
+npm install fhir-persistence
+```
+
+**Peer dependencies:**
+
+```bash
+npm install fhir-definition fhir-runtime
+```
+
+## Quick Start
+
+### Standalone (low-level)
 
 ```typescript
 import {
   SQLiteAdapter,
-  SearchParameterRegistry,
   FhirPersistence,
-} from "@medxai/fhir-persistence";
+  SearchParameterRegistry,
+} from "fhir-persistence";
 
-// 1. Create adapter
-const adapter = new SQLiteAdapter(); // in-memory SQLite
-await adapter.initialize();
+// 1. Create storage adapter
+const adapter = new SQLiteAdapter(":memory:");
 
-// 2. Create registry with search parameters
-const registry = new SearchParameterRegistry();
-registry.indexBundle(searchParameterBundle);
+// 2. Create search parameter registry
+const spRegistry = new SearchParameterRegistry();
+spRegistry.indexBundle(searchParameterBundle);
 
 // 3. Create persistence facade
-const persistence = new FhirPersistence({ adapter, registry });
+const persistence = new FhirPersistence({
+  adapter,
+  searchParameterRegistry: spRegistry,
+});
 
 // 4. CRUD with automatic indexing
 const patient = await persistence.createResource("Patient", {
   resourceType: "Patient",
+  name: [{ family: "Smith", given: ["John"] }],
   birthDate: "1990-01-15",
   active: true,
 });
 
-const read = await persistence.readResource("Patient", patient.id);
-
-await persistence.updateResource("Patient", {
-  ...read,
-  birthDate: "1991-02-02",
+const result = await persistence.searchResources({
+  resourceType: "Patient",
+  queryParams: {
+    birthdate: "ge1990-01-01",
+    active: "true",
+    _sort: "-birthdate",
+  },
 });
+```
 
-await persistence.deleteResource("Patient", patient.id);
+### With FhirSystem (recommended for fhir-engine)
+
+```typescript
+import { BetterSqlite3Adapter, FhirSystem, FhirDefinitionBridge } from 'fhir-persistence';
+import { loadDefinitionPackages } from 'fhir-definition';
+import { createRuntime } from 'fhir-runtime';
+
+// 1. Load FHIR definitions
+const { registry } = loadDefinitionPackages('./fhir-packages');
+
+// 2. Create runtime with definitions
+const runtime = await createRuntime({ definitions: registry });
+
+// 3. Create adapter + bridges
+const adapter = new BetterSqlite3Adapter({ path: './fhir.db' });
+const definitionBridge = new FhirDefinitionBridge(registry);
+
+// 4. Bootstrap via FhirSystem
+const system = new FhirSystem(adapter, { dialect: 'sqlite' });
+const { persistence, sdRegistry, spRegistry, igResult } =
+  await system.initialize(definitionBridge);
+
+// 5. Use persistence
+const patient = await persistence.createResource('Patient', { resourceType: 'Patient', ... });
 ```
 
 ## Architecture
 
 ```
-StorageAdapter (SQLite / PostgreSQL)
+StorageAdapter (SQLite / better-sqlite3 / PostgreSQL)
   └── FhirPersistence (end-to-end facade)
-        ├── FhirStore (basic CRUD)
+        ├── FhirStore (basic CRUD + soft delete + versioning)
         ├── IndexingPipeline
-        │     ├── buildSearchColumns (row indexer)
+        │     ├── RuntimeProvider (FHIRPath extraction, optional)
+        │     ├── buildSearchColumns (fallback row indexer)
         │     ├── extractReferencesV2 (reference indexer)
         │     └── LookupTableWriter (HumanName/Address/ContactPoint/Identifier)
+        ├── ConditionalService (conditional CRUD)
+        ├── BundleProcessorV2 (transaction / batch)
         ├── SearchParameterRegistry
         └── Search Engine
               ├── WhereBuilder v2 (chain search, ? placeholders)
               ├── SearchPlanner (filter reorder, two-phase recommendation)
               ├── SearchSQLBuilder v2 (single-phase + two-phase)
+              ├── SearchExecutor (_include / _revinclude / _include:iterate)
               └── SearchBundleBuilder
 ```
+
+## Storage Adapters
+
+| Adapter                | Backend                 | Use Case                          |
+| ---------------------- | ----------------------- | --------------------------------- |
+| `BetterSqlite3Adapter` | better-sqlite3 (native) | Production Node.js, CLI, Electron |
+| `SQLiteAdapter`        | sql.js (WASM)           | Browser, cross-platform, testing  |
+| `PostgresAdapter`      | pg                      | Production server                 |
 
 ## Search
 
@@ -78,8 +141,7 @@ import {
   parseSearchRequest,
   buildSearchSQLv2,
   planSearch,
-  buildTwoPhaseSearchSQLv2,
-} from "@medxai/fhir-persistence";
+} from "fhir-persistence";
 
 // Parse search URL
 const request = parseSearchRequest(
@@ -93,20 +155,16 @@ const request = parseSearchRequest(
   registry,
 );
 
-// Option A: Single-phase SQL
+// Single-phase SQL
 const sql = buildSearchSQLv2(request, registry);
-// → SELECT "id","versionId","content","lastUpdated","deleted"
-//   FROM "Patient" WHERE "deleted" = 0 AND ... ORDER BY ... LIMIT ?
 
-// Option B: Use planner for optimization
+// Two-phase SQL for large tables
 const plan = planSearch(request, registry, { estimatedRowCount: 100_000 });
 if (plan.useTwoPhase) {
   const { phase1, phase2Template } = buildTwoPhaseSearchSQLv2(
     plan.request,
     registry,
   );
-  // Phase 1: SELECT "id" FROM "Patient" WHERE ... LIMIT ?
-  // Phase 2: SELECT ... FROM "Patient" WHERE "id" IN (?, ?, ...)
 }
 
 // Chain search
@@ -117,43 +175,51 @@ const chainRequest = parseSearchRequest(
   },
   registry,
 );
-const chainSql = buildSearchSQLv2(chainRequest, registry);
-// → EXISTS (SELECT 1 FROM "Observation_References" __ref
-//     JOIN "Patient" __target ON __ref."targetId" = __target."id"
-//     WHERE __ref."resourceId" = "Observation"."id" AND ...)
 ```
 
-## Migration from v1
+## Schema Migration
 
-| v1 API                                | v2 Replacement                                                |
-| ------------------------------------- | ------------------------------------------------------------- |
-| `DatabaseClient`                      | `SQLiteAdapter` / `PostgresAdapter`                           |
-| `FhirRepository`                      | `FhirPersistence` (with indexing) or `FhirStore` (basic CRUD) |
-| `MigrationRunner`                     | `MigrationRunnerV2`                                           |
-| `buildWhereFragment`                  | `buildWhereFragmentV2` (? placeholders)                       |
-| `buildWhereClause`                    | `buildWhereClauseV2` (? placeholders, chain search)           |
-| `buildSearchSQL`                      | `buildSearchSQLv2` (? placeholders, no projectId)             |
-| `buildCountSQL`                       | `buildCountSQLv2` (? placeholders)                            |
-| `processTransaction` / `processBatch` | `BundleProcessorV2` (via FhirPersistence)                     |
+The IG persistence manager automatically handles schema evolution:
 
-### Key differences
+```typescript
+import { IGPersistenceManager } from "fhir-persistence";
 
-- **Placeholders**: v1 uses `$N` (PostgreSQL), v2 uses `?` (SQLite-compatible)
-- **No projectId**: v2 removes multi-tenant projectId scoping
-- **Soft delete**: v2 uses `deleted INTEGER 0/1` instead of `deleted BOOLEAN`
-- **Automatic indexing**: `FhirPersistence` automatically populates search columns, references, and lookup tables on CRUD
-- **Chain search**: v2 `buildWhereClauseV2` supports chained search parameters
-
-## Test Suite
-
+const igManager = new IGPersistenceManager(adapter, "sqlite");
+const result = await igManager.initialize({
+  name: "hl7.fhir.r4.core",
+  version: "4.0.1",
+  checksum: contentChecksum,
+  tableSets: generatedTableSets,
+});
+// result.action: 'new' | 'upgrade' | 'consistent'
 ```
-Stage 1-9:    295 tests (StorageAdapter → Production Hardening)
-Compliance:    60 tests (ADR compliance verification)
-Phase A:       37 tests (IndexingPipeline, LookupTableWriter, FhirPersistence)
-Phase B:       23 tests (Chain search, SearchPlanner, Two-phase SQL)
-Total:        415 v2 tests
+
+## Integration with fhir-engine
+
+`fhir-persistence` is designed to be bootstrapped by `fhir-engine`:
+
+```typescript
+import { createFhirEngine } from "fhir-engine";
+
+const engine = await createFhirEngine({
+  database: { type: "sqlite", url: "./fhir.db" },
+  packages: { path: "./fhir-packages" },
+});
+
+// engine.persistence — FhirPersistence instance
+// engine.definitions — DefinitionRegistry
+// engine.runtime — FhirRuntimeInstance
 ```
+
+## Dependencies
+
+| Package           | Role                                                                   |
+| ----------------- | ---------------------------------------------------------------------- |
+| `fhir-definition` | StructureDefinition, SearchParameter, ValueSet, CodeSystem definitions |
+| `fhir-runtime`    | FHIRPath evaluation, validation, search value extraction               |
+| `better-sqlite3`  | Native SQLite bindings (production)                                    |
+| `sql.js`          | WebAssembly SQLite (cross-platform)                                    |
 
 ## License
 
-See [LICENSE](./LICENSE).
+[MIT](./LICENSE)

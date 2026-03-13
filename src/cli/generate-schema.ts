@@ -23,8 +23,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { loadBundlesFromFiles } from '@medxai/fhir-core';
-
 import { StructureDefinitionRegistry } from '../registry/structure-definition-registry.js';
 import { SearchParameterRegistry } from '../registry/search-parameter-registry.js';
 import type { SearchParameterBundle } from '../registry/search-parameter-registry.js';
@@ -128,13 +126,24 @@ export function run(args: string[]): string {
   const platformDir = resolve(options.specDir, '..', '..', 'platform');
 
   // 1. Load StructureDefinitions (FHIR R4 + MedXAI platform)
-  const profilesResult = loadBundlesFromFiles([
+  const sdRegistry = new StructureDefinitionRegistry();
+  const bundleFiles = [
     resolve(options.specDir, 'profiles-resources.json'),
     resolve(platformDir, 'profiles-medxai.json'),
-  ]);
-
-  const sdRegistry = new StructureDefinitionRegistry();
-  sdRegistry.indexAll(profilesResult.profiles);
+  ];
+  for (const file of bundleFiles) {
+    try {
+      const bundle = JSON.parse(readFileSync(file, 'utf8'));
+      const entries = (bundle?.entry ?? []) as Array<{ resource?: Record<string, unknown> }>;
+      for (const entry of entries) {
+        if (entry.resource?.resourceType === 'StructureDefinition') {
+          sdRegistry.index(entry.resource as never);
+        }
+      }
+    } catch {
+      // File may not exist (e.g., platform profiles)
+    }
+  }
 
   // 2. Load SearchParameters (FHIR R4 + MedXAI platform)
   const spPath = resolve(options.specDir, 'search-parameters.json');

@@ -56,14 +56,12 @@ export interface IGInitResult {
 // =============================================================================
 
 export class IGPersistenceManager {
-  private readonly adapter: StorageAdapter;
   private readonly dialect: DDLDialect;
   private readonly packageRepo: PackageRegistryRepo;
   private readonly migrationRunner: MigrationRunnerV2;
   private readonly reindexScheduler: ReindexScheduler;
 
   constructor(adapter: StorageAdapter, dialect: DDLDialect = 'sqlite') {
-    this.adapter = adapter;
     this.dialect = dialect;
     this.packageRepo = new PackageRegistryRepo(adapter);
     this.migrationRunner = new MigrationRunnerV2(adapter);

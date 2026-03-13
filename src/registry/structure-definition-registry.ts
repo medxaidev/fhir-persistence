@@ -12,7 +12,17 @@
  * @module fhir-persistence/registry
  */
 
-import type { CanonicalProfile } from '@medxai/fhir-core';
+/**
+ * Minimal CanonicalProfile shape (replaces @medxai/fhir-core dependency).
+ */
+export interface CanonicalProfile {
+  url: string;
+  name: string;
+  kind: 'resource' | 'complex-type' | 'primitive-type' | 'logical';
+  type: string;
+  abstract: boolean;
+  elements: Map<string, unknown>;
+}
 
 // =============================================================================
 // Section 1: StructureDefinitionRegistry

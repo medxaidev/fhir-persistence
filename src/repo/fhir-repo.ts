@@ -507,7 +507,7 @@ export class FhirRepository implements ResourceRepository {
       options,
     );
     const result = await this.db.query<HistoryRawRow>(sql, values);
-    return result.rows.map((row) => toHistoryEntry(row, resourceType));
+    return result.rows.map((row: HistoryRawRow) => toHistoryEntry(row, resourceType));
   }
 
   async readTypeHistory(
@@ -519,7 +519,7 @@ export class FhirRepository implements ResourceRepository {
       options,
     );
     const result = await this.db.query<HistoryRawRow>(sql, values);
-    return result.rows.map((row) => toHistoryEntry(row, resourceType));
+    return result.rows.map((row: HistoryRawRow) => toHistoryEntry(row, resourceType));
   }
 
   // ---------------------------------------------------------------------------

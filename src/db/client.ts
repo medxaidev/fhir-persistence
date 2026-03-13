@@ -9,18 +9,34 @@
  * @module fhir-persistence/db
  */
 
-import pg from "pg";
+/**
+ * @deprecated Use StorageAdapter (SQLiteAdapter / BetterSqlite3Adapter) instead.
+ * This file is v1 legacy code kept for backward compatibility.
+ * Requires `pg` to be installed separately: `npm install pg @types/pg`
+ */
+
 import type { DatabaseConfig } from "./config.js";
 
-const { Pool } = pg;
-type PoolClient = pg.PoolClient;
+// Inline pg types — pg is an optional peer dependency (not bundled)
+interface PgQueryResult<T = Record<string, unknown>> {
+  rows: T[];
+  rowCount: number;
+}
+interface PgPoolClient {
+  query(text: string, values?: unknown[]): Promise<PgQueryResult>;
+  release(): void;
+}
+interface PgPool {
+  query<T = Record<string, unknown>>(text: string, values?: unknown[]): Promise<PgQueryResult<T>>;
+  connect(): Promise<PgPoolClient>;
+  end(): Promise<void>;
+}
 
-export class DatabaseClient {
-  private pool: pg.Pool;
-  private _closed = false;
-
-  constructor(config: DatabaseConfig) {
-    this.pool = new Pool({
+function createPool(config: DatabaseConfig): PgPool {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Pool } = require('pg') as { Pool: new (opts: Record<string, unknown>) => PgPool };
+    return new Pool({
       host: config.host,
       port: config.port,
       database: config.database,
@@ -30,15 +46,28 @@ export class DatabaseClient {
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     });
+  } catch {
+    throw new Error(
+      'DatabaseClient requires the "pg" package. Install it: npm install pg',
+    );
+  }
+}
+
+export class DatabaseClient {
+  private pool: PgPool;
+  private _closed = false;
+
+  constructor(config: DatabaseConfig) {
+    this.pool = createPool(config);
   }
 
   /**
    * Execute a SQL query against the pool.
    */
-  async query<T extends pg.QueryResultRow = pg.QueryResultRow>(
+  async query<T = Record<string, unknown>>(
     text: string,
     values?: unknown[],
-  ): Promise<pg.QueryResult<T>> {
+  ): Promise<PgQueryResult<T>> {
     return this.pool.query<T>(text, values);
   }
 
@@ -51,7 +80,7 @@ export class DatabaseClient {
    * - Auto-retries on PostgreSQL serialization_failure (40001) with
    *   exponential backoff (max 3 retries).
    */
-  async withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  async withTransaction<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
     const maxRetries = 3;
     let attempt = 0;
 

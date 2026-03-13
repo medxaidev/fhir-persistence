@@ -256,9 +256,9 @@ function resolveColumnType(type: SearchParamType, array: boolean): SearchColumnT
     case 'reference':
       return array ? 'TEXT[]' : 'TEXT';
     case 'token':
-      // Token columns use UUID[] for the hash column;
+      // Token columns use TEXT for the hash column in v2 DDL;
       // the actual column type is set by the token-column strategy
-      return 'UUID[]';
+      return 'TEXT';
     default:
       return 'TEXT';
   }

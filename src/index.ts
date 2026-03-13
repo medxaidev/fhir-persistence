@@ -1,9 +1,8 @@
 /**
- * `@medxai/fhir-persistence` — Public API
+ * `fhir-persistence` — Embedded FHIR R4 Persistence Layer
  *
- * Provides schema generation from FHIR StructureDefinitions and
- * SearchParameters to PostgreSQL DDL. No database dependency —
- * all functions are pure and fully unit-testable.
+ * Provides CRUD, search, indexing, schema migration, and terminology
+ * for FHIR R4 resources over SQLite (sql.js / better-sqlite3) and PostgreSQL.
  *
  * @packageDocumentation
  */
@@ -237,3 +236,16 @@ export { planSearch } from './search/search-planner.js';
 export { ResourceCacheV2 } from './cache/resource-cache.js';
 export { SearchLogger } from './observability/search-logger.js';
 export { reindexResourceTypeV2, reindexAllV2 } from './cli/reindex.js';
+
+// ─── v2: FhirSystem (startup orchestrator for fhir-engine) ──────────────────
+export { FhirSystem } from './startup/fhir-system.js';
+export type { FhirSystemOptions, FhirSystemReady } from './startup/fhir-system.js';
+
+// ─── v2: BetterSqlite3Adapter (native SQLite, production recommended) ───────
+export { BetterSqlite3Adapter } from './db/better-sqlite3-adapter.js';
+export type { BetterSqlite3Options } from './db/better-sqlite3-adapter.js';
+
+// ─── v2: Provider bridges (for fhir-engine integration) ─────────────────────
+export { FhirDefinitionBridge } from './providers/fhir-definition-provider.js';
+export { FhirRuntimeProvider, createFhirRuntimeProvider } from './providers/fhir-runtime-provider.js';
+export type { FhirRuntimeProviderOptions } from './providers/fhir-runtime-provider.js';
