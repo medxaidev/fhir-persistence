@@ -232,8 +232,15 @@ export function mapRowsToResourcesV2(rows: SearchRowV2[]): PersistedResource[] {
 // Section 5: v2 Include / Revinclude (StorageAdapter)
 // =============================================================================
 
+/** Maximum recursion depth for _include:iterate (ADR limit). */
+const MAX_INCLUDE_ITERATE_DEPTH = 3;
+
+/** Maximum total included resources (safety cap). */
+const MAX_INCLUDE_RESOURCES = 1000;
+
 /**
  * v2: Execute _include using StorageAdapter with ? placeholders.
+ * Supports _include:iterate for recursive include resolution.
  */
 async function executeIncludeV2(
   adapter: StorageAdapter,
@@ -246,12 +253,57 @@ async function executeIncludeV2(
   const seen = new Set(primaryResults.map(r => `${r.resourceType}/${r.id}`));
   const allIncluded: PersistedResource[] = [];
 
+  // Separate iterate vs non-iterate includes
+  const nonIterateIncludes = includes.filter(i => !i.iterate);
+  const iterateIncludes = includes.filter(i => i.iterate);
+
+  // Phase 1: Non-iterate includes (single pass)
+  const firstPassResults = await resolveIncludesOnce(
+    adapter, primaryResults, nonIterateIncludes, registry, seen, allIncluded,
+  );
+
+  // Phase 2: Iterate includes (recursive, up to MAX_INCLUDE_ITERATE_DEPTH)
+  if (iterateIncludes.length > 0) {
+    // Start with primary + first-pass results as the source pool
+    let currentSources: PersistedResource[] = [...primaryResults, ...firstPassResults];
+
+    for (let depth = 0; depth < MAX_INCLUDE_ITERATE_DEPTH; depth++) {
+      if (allIncluded.length >= MAX_INCLUDE_RESOURCES) break;
+
+      const newlyIncluded = await resolveIncludesOnce(
+        adapter, currentSources, iterateIncludes, registry, seen, allIncluded,
+      );
+
+      if (newlyIncluded.length === 0) break; // No new resources found — stop
+      currentSources = newlyIncluded; // Next iteration uses newly included as sources
+    }
+  }
+
+  return allIncluded;
+}
+
+/**
+ * Single pass of include resolution. Returns newly included resources.
+ */
+async function resolveIncludesOnce(
+  adapter: StorageAdapter,
+  sourceResources: PersistedResource[],
+  includes: IncludeTarget[],
+  registry: SearchParameterRegistry,
+  seen: Set<string>,
+  allIncluded: PersistedResource[],
+): Promise<PersistedResource[]> {
+  const newlyIncluded: PersistedResource[] = [];
+
   for (const include of includes) {
+    if (allIncluded.length >= MAX_INCLUDE_RESOURCES) break;
+
     if (include.wildcard) {
-      // Wildcard: scan all reference strings from primary results
-      for (const resource of primaryResults) {
+      for (const resource of sourceResources) {
+        if (allIncluded.length >= MAX_INCLUDE_RESOURCES) break;
         const refs = extractAllRefsFromResource(resource);
         for (const ref of refs) {
+          if (allIncluded.length >= MAX_INCLUDE_RESOURCES) break;
           const key = `${ref.resourceType}/${ref.id}`;
           if (seen.has(key)) continue;
           try {
@@ -263,6 +315,7 @@ async function executeIncludeV2(
               const res = JSON.parse(row.content) as PersistedResource;
               seen.add(key);
               allIncluded.push(res);
+              newlyIncluded.push(res);
             }
           } catch {
             // Table may not exist
@@ -275,10 +328,12 @@ async function executeIncludeV2(
     const impl = registry.getImpl(include.resourceType, include.searchParam);
     if (!impl || impl.type !== 'reference') continue;
 
-    const sourceResults = primaryResults.filter(r => r.resourceType === include.resourceType);
-    for (const resource of sourceResults) {
+    const matchingResources = sourceResources.filter(r => r.resourceType === include.resourceType);
+    for (const resource of matchingResources) {
+      if (allIncluded.length >= MAX_INCLUDE_RESOURCES) break;
       const refs = extractRefsFromField(resource, impl.columnName);
       for (const ref of refs) {
+        if (allIncluded.length >= MAX_INCLUDE_RESOURCES) break;
         if (include.targetType && ref.resourceType !== include.targetType) continue;
         const key = `${ref.resourceType}/${ref.id}`;
         if (seen.has(key)) continue;
@@ -291,6 +346,7 @@ async function executeIncludeV2(
             const res = JSON.parse(row.content) as PersistedResource;
             seen.add(key);
             allIncluded.push(res);
+            newlyIncluded.push(res);
           }
         } catch {
           // Table may not exist
@@ -299,7 +355,7 @@ async function executeIncludeV2(
     }
   }
 
-  return allIncluded;
+  return newlyIncluded;
 }
 
 /**

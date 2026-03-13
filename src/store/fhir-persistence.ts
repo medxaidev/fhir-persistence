@@ -390,6 +390,41 @@ export class FhirPersistence {
   }
 
   // ---------------------------------------------------------------------------
+  // SEARCH (streaming)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Stream search results row-by-row for large result sets.
+   *
+   * Uses `StorageAdapter.queryStream` for true row-by-row iteration
+   * without loading all results into memory. Useful for:
+   * - Export operations ($export)
+   * - Reindex-all workflows
+   * - Large batch processing
+   *
+   * NOTE: Does NOT include _include/_revinclude resources.
+   * Use `searchResources` for full FHIR search with includes.
+   */
+  async *searchStream(
+    resourceType: string,
+    sql: string,
+    params: unknown[] = [],
+  ): AsyncGenerator<PersistedResource> {
+    for await (const row of this.adapter.queryStream<{
+      content: string;
+      deleted: number;
+    }>(sql, params)) {
+      if (row.deleted === 1) continue;
+      if (!row.content) continue;
+      try {
+        yield JSON.parse(row.content) as PersistedResource;
+      } catch {
+        // Skip invalid JSON
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Re-index a single resource
   // ---------------------------------------------------------------------------
 

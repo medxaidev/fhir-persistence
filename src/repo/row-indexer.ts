@@ -364,7 +364,11 @@ function populateColumnStrategy(
 }
 
 /**
- * Populate token-column values (3 columns: hash UUID[], text TEXT[], sort TEXT).
+ * Populate token-column values (2 columns: __X TEXT[], __XSort TEXT).
+ *
+ * v2 DDL produces only 2 columns per token-column SearchParameter:
+ * - `__<name>` — TEXT[] of "system|code" strings (not UUID hashes)
+ * - `__<name>Sort` — display text for :text modifier search
  */
 function populateTokenColumnStrategy(
   resource: FhirResource,
@@ -383,19 +387,22 @@ function populateTokenColumnStrategy(
 
   if (allTokens.length === 0) return;
 
-  // Hash column: __<name> UUID[]
-  const hashes = allTokens.map((t) => hashToken(t.system, t.code));
-  columns[`__${impl.columnName}`] = hashes;
+  // Token column: __<name> TEXT[] — "system|code" strings (v2 DDL: TEXT[], not UUID[])
+  const tokenStrings: string[] = [];
+  for (const t of allTokens) {
+    // With system: "system|code"
+    if (t.system) {
+      tokenStrings.push(`${t.system}|${t.code}`);
+    }
+    // Without system (or as fallback): "|code"
+    tokenStrings.push(`|${t.code}`);
+  }
+  columns[`__${impl.columnName}`] = tokenStrings;
 
-  // Text column: __<name>Text TEXT[]
-  const texts = allTokens.map((t) =>
-    t.system ? `${t.system}|${t.code}` : t.code,
-  );
-  columns[`__${impl.columnName}Text`] = texts;
-
-  // Sort column: __<name>Sort TEXT — stores display text for :text modifier search
-  // Falls back to system|code if no display is available
-  const sortValue = allTokens[0].display || texts[0] || null;
+  // Sort column: __<name>Sort TEXT — display text for :text modifier search
+  const sortValue = allTokens[0].display
+    || (allTokens[0].system ? `${allTokens[0].system}|${allTokens[0].code}` : allTokens[0].code)
+    || null;
   columns[`__${impl.columnName}Sort`] = sortValue;
 }
 
@@ -435,39 +442,27 @@ export function buildSharedTokenColumns(
   searchCols: SearchColumnValues,
   metadataCols: SearchColumnValues,
 ): SearchColumnValues {
-  const allHashes: string[] = [];
   const allTexts: string[] = [];
 
   // Collect from identifier token columns (search columns)
+  // v2: __identifier stores TEXT[] of "system|code" strings directly
   if (Array.isArray(searchCols["__identifier"])) {
-    allHashes.push(...(searchCols["__identifier"] as string[]));
-  }
-  if (Array.isArray(searchCols["__identifierText"])) {
-    allTexts.push(...(searchCols["__identifierText"] as string[]));
+    allTexts.push(...(searchCols["__identifier"] as string[]));
   }
 
   // Collect from _tag (metadata columns — triple underscore)
   if (Array.isArray(metadataCols["___tag"])) {
-    allHashes.push(...(metadataCols["___tag"] as string[]));
-  }
-  if (Array.isArray(metadataCols["___tagText"])) {
-    allTexts.push(...(metadataCols["___tagText"] as string[]));
+    allTexts.push(...(metadataCols["___tag"] as string[]));
   }
 
   // Collect from _security (metadata columns — triple underscore)
   if (Array.isArray(metadataCols["___security"])) {
-    allHashes.push(...(metadataCols["___security"] as string[]));
-  }
-  if (Array.isArray(metadataCols["___securityText"])) {
-    allTexts.push(...(metadataCols["___securityText"] as string[]));
+    allTexts.push(...(metadataCols["___security"] as string[]));
   }
 
   const result: SearchColumnValues = {};
-  if (allHashes.length > 0) {
-    result["__sharedTokens"] = allHashes;
-  }
   if (allTexts.length > 0) {
-    result["__sharedTokensText"] = allTexts;
+    result["__sharedTokens"] = allTexts;
   }
   return result;
 }
@@ -480,11 +475,10 @@ export function buildSharedTokenColumns(
  * Build metadata search column values from a FHIR resource's `meta` element.
  *
  * Extracts `meta.tag` and `meta.security` into the fixed metadata columns:
- * - `___tag UUID[]`, `___tagText TEXT[]`, `___tagSort TEXT` (triple underscore — matches Medplum)
- * - `___security UUID[]`, `___securityText TEXT[]`, `___securitySort TEXT`
+ * - `___tag` TEXT[] of "system|code" strings, `___tagSort` TEXT (triple underscore — matches Medplum)
+ * - `___security` TEXT[] of "system|code" strings, `___securitySort` TEXT
  *
- * These columns exist on every main table and are independent of the
- * SearchParameterRegistry (they apply to all resource types).
+ * v2 DDL: 2 columns per metadata token (not 3). No UUID hash, no Text column.
  *
  * @param resource - The FHIR resource to extract metadata from.
  * @returns Column name → value map for metadata search columns.
@@ -505,11 +499,15 @@ export function buildMetadataColumns(
       tokens.push(...extractTokenValues(tag));
     }
     if (tokens.length > 0) {
-      columns["___tag"] = tokens.map((t) => hashToken(t.system, t.code));
-      columns["___tagText"] = tokens.map((t) =>
-        t.system ? `${t.system}|${t.code}` : t.code,
-      );
-      columns["___tagSort"] = (columns["___tagText"] as string[])[0] ?? null;
+      const tagStrings: string[] = [];
+      for (const t of tokens) {
+        if (t.system) tagStrings.push(`${t.system}|${t.code}`);
+        tagStrings.push(`|${t.code}`);
+      }
+      columns["___tag"] = tagStrings;
+      columns["___tagSort"] = tokens[0].display
+        || (tokens[0].system ? `${tokens[0].system}|${tokens[0].code}` : tokens[0].code)
+        || null;
     }
   }
 
@@ -520,12 +518,15 @@ export function buildMetadataColumns(
       tokens.push(...extractTokenValues(sec));
     }
     if (tokens.length > 0) {
-      columns["___security"] = tokens.map((t) => hashToken(t.system, t.code));
-      columns["___securityText"] = tokens.map((t) =>
-        t.system ? `${t.system}|${t.code}` : t.code,
-      );
-      columns["___securitySort"] =
-        (columns["___securityText"] as string[])[0] ?? null;
+      const secStrings: string[] = [];
+      for (const t of tokens) {
+        if (t.system) secStrings.push(`${t.system}|${t.code}`);
+        secStrings.push(`|${t.code}`);
+      }
+      columns["___security"] = secStrings;
+      columns["___securitySort"] = tokens[0].display
+        || (tokens[0].system ? `${tokens[0].system}|${tokens[0].code}` : tokens[0].code)
+        || null;
     }
   }
 

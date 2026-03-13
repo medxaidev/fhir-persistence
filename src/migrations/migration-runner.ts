@@ -205,7 +205,7 @@ export class MigrationRunner {
     const result = await this.db.query<{ version: number }>(
       `SELECT version FROM "${TRACKING_TABLE}"`,
     );
-    return new Set(result.rows.map((r) => r.version));
+    return new Set(result.rows.map((r: { version: number }) => r.version));
   }
 
   private async applyMigration(migration: Migration): Promise<void> {

@@ -312,13 +312,12 @@ describe('Row Indexer — buildSearchColumns (token-column strategy)', () => {
       expression: 'Patient.gender',
       strategy: 'token-column',
       columnName: 'gender',
-      columnType: 'UUID[]',
+      columnType: 'TEXT[]',
       array: true,
     })];
     const cols = buildSearchColumns(resource, impls);
-    expect(cols.__gender).toHaveLength(1);
-    expect((cols.__gender as string[])[0]).toMatch(/^[0-9a-f]{8}-/);
-    expect(cols.__genderText).toEqual(['male']);
+    // v2: __gender stores TEXT[] with "|code" entries (no system for plain string)
+    expect(cols.__gender).toEqual(['|male']);
     expect(cols.__genderSort).toBe('male');
   });
 
@@ -339,15 +338,15 @@ describe('Row Indexer — buildSearchColumns (token-column strategy)', () => {
       expression: 'Observation.code',
       strategy: 'token-column',
       columnName: 'code',
-      columnType: 'UUID[]',
+      columnType: 'TEXT[]',
       array: true,
       resourceTypes: ['Observation'],
     })];
     const cols = buildSearchColumns(resource, impls);
-    expect(cols.__code).toHaveLength(2);
-    expect(cols.__codeText).toEqual([
-      'http://loinc.org|12345-6',
-      'http://snomed.info|789',
+    // v2: both "system|code" and "|code" entries per token
+    expect(cols.__code).toEqual([
+      'http://loinc.org|12345-6', '|12345-6',
+      'http://snomed.info|789', '|789',
     ]);
     expect(cols.__codeSort).toBe('Test');
   });
@@ -360,11 +359,11 @@ describe('Row Indexer — buildSearchColumns (token-column strategy)', () => {
       expression: 'Patient.active',
       strategy: 'token-column',
       columnName: 'active',
-      columnType: 'UUID[]',
+      columnType: 'TEXT[]',
       array: true,
     })];
     const cols = buildSearchColumns(resource, impls);
-    expect(cols.__activeText).toEqual(['true']);
+    expect(cols.__active).toEqual(['|true']);
     expect(cols.__activeSort).toBe('true');
   });
 
@@ -376,12 +375,12 @@ describe('Row Indexer — buildSearchColumns (token-column strategy)', () => {
       expression: 'Patient.gender',
       strategy: 'token-column',
       columnName: 'gender',
-      columnType: 'UUID[]',
+      columnType: 'TEXT[]',
       array: true,
     })];
     const cols = buildSearchColumns(resource, impls);
     expect(cols.__gender).toBeUndefined();
-    expect(cols.__genderText).toBeUndefined();
+    expect(cols.__genderSort).toBeUndefined();
   });
 
   it('extracts token from Identifier', () => {
@@ -397,12 +396,11 @@ describe('Row Indexer — buildSearchColumns (token-column strategy)', () => {
       expression: 'Patient.identifier',
       strategy: 'token-column',
       columnName: 'identifier',
-      columnType: 'UUID[]',
+      columnType: 'TEXT[]',
       array: true,
     })];
     const cols = buildSearchColumns(resource, impls);
-    expect(cols.__identifier).toHaveLength(1);
-    expect(cols.__identifierText).toEqual(['http://hospital.org|MRN-001']);
+    expect(cols.__identifier).toEqual(['http://hospital.org|MRN-001', '|MRN-001']);
   });
 });
 
@@ -571,11 +569,11 @@ describe('Row Indexer — buildSearchColumns (multiple impls)', () => {
       }),
       makeImpl({
         code: 'gender', type: 'token', expression: 'Patient.gender',
-        strategy: 'token-column', columnName: 'gender', columnType: 'UUID[]', array: true,
+        strategy: 'token-column', columnName: 'gender', columnType: 'TEXT[]', array: true,
       }),
       makeImpl({
         code: 'active', type: 'token', expression: 'Patient.active',
-        strategy: 'token-column', columnName: 'active', columnType: 'UUID[]', array: true,
+        strategy: 'token-column', columnName: 'active', columnType: 'TEXT[]', array: true,
       }),
       makeImpl({
         code: 'name', type: 'string', expression: 'Patient.name',
@@ -585,10 +583,8 @@ describe('Row Indexer — buildSearchColumns (multiple impls)', () => {
     const cols = buildSearchColumns(resource, impls);
 
     expect(cols.birthdate).toBe('1990-01-01');
-    expect(cols.__gender).toHaveLength(1);
-    expect(cols.__genderText).toEqual(['female']);
-    expect(cols.__active).toHaveLength(1);
-    expect(cols.__activeText).toEqual(['true']);
+    expect(cols.__gender).toEqual(['|female']);
+    expect(cols.__active).toEqual(['|true']);
     expect(cols.__nameSort).toBe('Doe Jane');
   });
 
@@ -604,7 +600,7 @@ describe('Row Indexer — buildSearchColumns (multiple impls)', () => {
 // =============================================================================
 
 describe('buildMetadataColumns', () => {
-  it('extracts meta.tag → ___tag, ___tagText, ___tagSort', () => {
+  it('extracts meta.tag → ___tag, ___tagSort', () => {
     const resource = {
       resourceType: 'Patient',
       meta: {
@@ -612,12 +608,12 @@ describe('buildMetadataColumns', () => {
       },
     };
     const cols = buildMetadataColumns(resource);
-    expect(cols.___tag).toHaveLength(1);
-    expect(cols.___tagText).toEqual(['http://example.com|urgent']);
-    expect(cols.___tagSort).toBe('http://example.com|urgent');
+    // v2: ___tag stores TEXT[] with both system|code and |code entries
+    expect(cols.___tag).toEqual(['http://example.com|urgent', '|urgent']);
+    expect(cols.___tagSort).toBe('Urgent');
   });
 
-  it('extracts meta.security → ___security, ___securityText, ___securitySort', () => {
+  it('extracts meta.security → ___security, ___securitySort', () => {
     const resource = {
       resourceType: 'Patient',
       meta: {
@@ -625,8 +621,9 @@ describe('buildMetadataColumns', () => {
       },
     };
     const cols = buildMetadataColumns(resource);
-    expect(cols.___security).toHaveLength(1);
-    expect(cols.___securityText).toEqual(['http://terminology.hl7.org/CodeSystem/v3-Confidentiality|R']);
+    expect(cols.___security).toEqual([
+      'http://terminology.hl7.org/CodeSystem/v3-Confidentiality|R', '|R',
+    ]);
     expect(cols.___securitySort).toBe('http://terminology.hl7.org/CodeSystem/v3-Confidentiality|R');
   });
 
@@ -634,7 +631,7 @@ describe('buildMetadataColumns', () => {
     const resource = { resourceType: 'Patient', meta: { lastUpdated: '2026-01-01' } };
     const cols = buildMetadataColumns(resource);
     expect(cols.___tag).toBeUndefined();
-    expect(cols.___tagText).toBeUndefined();
+    expect(cols.___tagSort).toBeUndefined();
   });
 
   it('multiple tags → arrays with all values', () => {
@@ -648,8 +645,10 @@ describe('buildMetadataColumns', () => {
       },
     };
     const cols = buildMetadataColumns(resource);
-    expect(cols.___tag).toHaveLength(2);
-    expect(cols.___tagText).toEqual(['http://a.com|x', 'http://b.com|y']);
+    expect(cols.___tag).toEqual([
+      'http://a.com|x', '|x',
+      'http://b.com|y', '|y',
+    ]);
     expect(cols.___tagSort).toBe('http://a.com|x');
   });
 
@@ -659,7 +658,7 @@ describe('buildMetadataColumns', () => {
       meta: { tag: [{ system: 'http://example.com', code: 'urgent' }] },
     };
     const cols = buildMetadataColumns(resource);
-    expect(cols.___tagText).toEqual(['http://example.com|urgent']);
+    expect(cols.___tag).toEqual(['http://example.com|urgent', '|urgent']);
   });
 
   it('tag with code only (no system) → no system prefix', () => {
@@ -668,7 +667,8 @@ describe('buildMetadataColumns', () => {
       meta: { tag: [{ code: 'local-tag' }] },
     };
     const cols = buildMetadataColumns(resource);
-    expect(cols.___tagText).toEqual(['local-tag']);
+    // No system → only "|code" entry
+    expect(cols.___tag).toEqual(['|local-tag']);
   });
 
   it('empty meta → empty result', () => {

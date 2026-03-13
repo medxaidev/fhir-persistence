@@ -837,7 +837,7 @@ function resolveImpl(
         expression: 'meta.tag',
         strategy: 'token-column',
         columnName: '_tag',
-        columnType: 'UUID[]',
+        columnType: 'TEXT[]',
         array: true,
       };
     case '_security':
@@ -848,7 +848,7 @@ function resolveImpl(
         expression: 'meta.security',
         strategy: 'token-column',
         columnName: '_security',
-        columnType: 'UUID[]',
+        columnType: 'TEXT[]',
         array: true,
       };
     case '_profile':
