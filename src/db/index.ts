@@ -19,3 +19,8 @@ export type { SqlDialect } from './dialect.js';
 // v2 — SQLite implementation
 export { SQLiteAdapter } from './sqlite-adapter.js';
 export { SQLiteDialect } from './sqlite-dialect.js';
+
+// v2 — PostgreSQL implementation
+export { PostgresAdapter, rewritePlaceholders } from './postgres-adapter.js';
+export type { PgPoolLike, PgClientLike, AsyncTransactionContext } from './postgres-adapter.js';
+export { PostgresDialect } from './postgres-dialect.js';
