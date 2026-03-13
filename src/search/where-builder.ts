@@ -877,3 +877,336 @@ function resolveImpl(
       return registry.getImpl(resourceType, param.code) ?? null;
   }
 }
+
+// =============================================================================
+// Section 13: v2 WHERE Builder (SQLite ? placeholders)
+// =============================================================================
+
+/**
+ * v2: Build a WHERE clause fragment using ? placeholders (SQLite).
+ *
+ * Dispatches to type-specific v2 builders. Key differences from v1:
+ * - Uses `?` instead of `$N`
+ * - Token search uses `json_each()` instead of `ARRAY[]::text[]`
+ * - Array columns use `json_each()` instead of PG array operators
+ */
+export function buildWhereFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment | null {
+  if (param.modifier === 'missing') {
+    return buildMissingFragmentV2(impl, param);
+  }
+
+  if (impl.strategy === 'lookup-table') {
+    return buildLookupTableFragmentV2(impl, param);
+  }
+
+  if (impl.strategy === 'token-column') {
+    return buildTokenColumnFragmentV2(impl, param);
+  }
+
+  switch (impl.type) {
+    case 'string':
+      return buildStringFragmentV2(impl, param);
+    case 'date':
+      return buildDateFragmentV2(impl, param);
+    case 'number':
+    case 'quantity':
+      return buildNumberFragmentV2(impl, param);
+    case 'reference':
+      return buildReferenceFragmentV2(impl, param);
+    case 'uri':
+      return buildUriFragmentV2(impl, param);
+    case 'token':
+      return buildTokenColumnFragmentV2(impl, param);
+    default:
+      return buildDefaultFragmentV2(impl, param);
+  }
+}
+
+// -- v2 :missing --
+function buildMissingFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const isMissing = param.values[0] === 'true';
+  const col = quoteColumn(impl.columnName);
+  return { sql: isMissing ? `${col} IS NULL` : `${col} IS NOT NULL`, values: [] };
+}
+
+// -- v2 lookup-table --
+function buildLookupTableFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const mapping = LOOKUP_TABLE_MAP[impl.code];
+  if (!mapping) {
+    const sortCol = quoteColumn(`__${impl.columnName}Sort`);
+    if (param.modifier === 'exact') return buildOrFragmentV2(sortCol, '=', param.values);
+    if (param.modifier === 'contains') return buildLikeFragmentV2(sortCol, param.values, '%', '%');
+    return buildLikeFragmentV2(sortCol, param.values, '', '%');
+  }
+  const { table, column } = mapping;
+  const colRef = `__lookup."${column}"`;
+  if (param.modifier === 'exact') {
+    if (param.values.length === 1) {
+      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND ${colRef} = ?)`, values: [param.values[0]] };
+    }
+    const conds = param.values.map(() => `${colRef} = ?`);
+    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conds.join(' OR ')}))`, values: [...param.values] };
+  }
+  if (param.modifier === 'contains') {
+    if (param.values.length === 1) {
+      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(${colRef}) LIKE ?)`, values: [`%${param.values[0].toLowerCase()}%`] };
+    }
+    const conds = param.values.map(() => `LOWER(${colRef}) LIKE ?`);
+    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conds.join(' OR ')}))`, values: param.values.map(v => `%${v.toLowerCase()}%`) };
+  }
+  // default prefix match
+  if (param.values.length === 1) {
+    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(${colRef}) LIKE ?)`, values: [`${param.values[0].toLowerCase()}%`] };
+  }
+  const conds = param.values.map(() => `LOWER(${colRef}) LIKE ?`);
+  return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conds.join(' OR ')}))`, values: param.values.map(v => `${v.toLowerCase()}%`) };
+}
+
+// -- v2 string --
+function buildStringFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const col = quoteColumn(impl.columnName);
+  if (param.modifier === 'exact') return buildOrFragmentV2(col, '=', param.values);
+  if (param.modifier === 'contains') return buildLikeFragmentV2(col, param.values, '%', '%');
+  return buildLikeFragmentV2(col, param.values, '', '%');
+}
+
+// -- v2 date --
+function buildDateFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const col = quoteColumn(impl.columnName);
+  if (param.prefix === 'ap') {
+    if (param.values.length === 1) {
+      const d = new Date(param.values[0]);
+      const lo = new Date(d.getTime() - 86_400_000).toISOString();
+      const hi = new Date(d.getTime() + 86_400_000).toISOString();
+      return { sql: `${col} BETWEEN ? AND ?`, values: [lo, hi] };
+    }
+    const conds: string[] = [];
+    const vals: unknown[] = [];
+    for (const v of param.values) {
+      conds.push(`${col} BETWEEN ? AND ?`);
+      const d = new Date(v);
+      vals.push(new Date(d.getTime() - 86_400_000).toISOString());
+      vals.push(new Date(d.getTime() + 86_400_000).toISOString());
+    }
+    return { sql: `(${conds.join(' OR ')})`, values: vals };
+  }
+  const op = prefixToOperator(param.prefix);
+  return buildOrFragmentV2(col, op, param.values);
+}
+
+// -- v2 number/quantity --
+function buildNumberFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const col = quoteColumn(impl.columnName);
+  if (param.prefix === 'ap') {
+    if (param.values.length === 1) {
+      const n = parseFloat(param.values[0]);
+      return { sql: `${col} BETWEEN ? AND ?`, values: [n * 0.9, n * 1.1] };
+    }
+    const conds: string[] = [];
+    const vals: unknown[] = [];
+    for (const v of param.values) {
+      const n = parseFloat(v);
+      conds.push(`${col} BETWEEN ? AND ?`);
+      vals.push(n * 0.9, n * 1.1);
+    }
+    return { sql: `(${conds.join(' OR ')})`, values: vals };
+  }
+  const op = prefixToOperator(param.prefix);
+  const numVals = param.values.map(v => { const n = parseFloat(v); return isNaN(n) ? v : n; });
+  return buildOrFragmentV2Raw(col, op, numVals);
+}
+
+// -- v2 reference --
+function buildReferenceFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const col = quoteColumn(impl.columnName);
+  // For array reference columns in SQLite, use json_each
+  if (impl.array) {
+    if (param.values.length === 1) {
+      return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value = ?)`, values: [param.values[0]] };
+    }
+    const placeholders = param.values.map(() => '?').join(', ');
+    return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value IN (${placeholders}))`, values: [...param.values] };
+  }
+  return buildOrFragmentV2(col, '=', param.values);
+}
+
+// -- v2 uri --
+function buildUriFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const col = quoteColumn(impl.columnName);
+  if (impl.array) {
+    if (param.values.length === 1) {
+      return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value = ?)`, values: [param.values[0]] };
+    }
+    const placeholders = param.values.map(() => '?').join(', ');
+    return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value IN (${placeholders}))`, values: [...param.values] };
+  }
+  return buildOrFragmentV2(col, '=', param.values);
+}
+
+// -- v2 token (json_each for SQLite) --
+function buildTokenColumnFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  // v2 token columns: __<name>Text is a JSON array string (TEXT), __<name>Sort is TEXT
+  const textCol = quoteColumn(`__${impl.columnName}Text`);
+  const sortCol = quoteColumn(`__${impl.columnName}Sort`);
+
+  // :text modifier — search display text via sort column
+  if (param.modifier === 'text') {
+    return buildLikeFragmentV2(sortCol, param.values, '', '%');
+  }
+
+  // system| pattern
+  const needsLike = param.values.some(v => v.endsWith('|'));
+  if (needsLike) {
+    const conds: string[] = [];
+    const vals: unknown[] = [];
+    for (const value of param.values) {
+      if (value.endsWith('|')) {
+        conds.push(`EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value LIKE ?)`);
+        vals.push(value + '%');
+      } else {
+        conds.push(`EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value = ?)`);
+        vals.push(value.startsWith('|') ? value.slice(1) : value);
+      }
+    }
+    const inner = conds.length === 1 ? conds[0] : `(${conds.join(' OR ')})`;
+    const sql = param.modifier === 'not' ? `NOT (${inner})` : inner;
+    return { sql, values: vals };
+  }
+
+  const resolvedValues = param.values.map(v => v.startsWith('|') ? v.slice(1) : v);
+
+  if (param.modifier === 'not') {
+    if (resolvedValues.length === 1) {
+      return { sql: `NOT EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value = ?)`, values: [resolvedValues[0]] };
+    }
+    const placeholders = resolvedValues.map(() => '?').join(', ');
+    return { sql: `NOT EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value IN (${placeholders}))`, values: [...resolvedValues] };
+  }
+
+  // Default: any value matches
+  if (resolvedValues.length === 1) {
+    return { sql: `EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value = ?)`, values: [resolvedValues[0]] };
+  }
+  const placeholders = resolvedValues.map(() => '?').join(', ');
+  return { sql: `EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value IN (${placeholders}))`, values: [...resolvedValues] };
+}
+
+// -- v2 default --
+function buildDefaultFragmentV2(
+  impl: SearchParameterImpl,
+  param: ParsedSearchParam,
+): WhereFragment {
+  const col = quoteColumn(impl.columnName);
+  const op = prefixToOperator(param.prefix);
+  return buildOrFragmentV2(col, op, param.values);
+}
+
+// -- v2 shared helpers --
+function buildOrFragmentV2(col: string, op: string, values: string[]): WhereFragment {
+  return buildOrFragmentV2Raw(col, op, values);
+}
+
+function buildOrFragmentV2Raw(col: string, op: string, values: unknown[]): WhereFragment {
+  if (values.length === 1) {
+    return { sql: `${col} ${op} ?`, values: [values[0]] };
+  }
+  const conds = values.map(() => `${col} ${op} ?`);
+  return { sql: `(${conds.join(' OR ')})`, values: [...values] };
+}
+
+function buildLikeFragmentV2(col: string, values: string[], prefix: string, suffix: string): WhereFragment {
+  if (values.length === 1) {
+    const escaped = escapeLikeString(values[0]).toLowerCase();
+    return { sql: `LOWER(${col}) LIKE ?`, values: [`${prefix}${escaped}${suffix}`] };
+  }
+  const conds: string[] = [];
+  const vals: unknown[] = [];
+  for (const v of values) {
+    conds.push(`LOWER(${col}) LIKE ?`);
+    vals.push(`${prefix}${escapeLikeString(v).toLowerCase()}${suffix}`);
+  }
+  return { sql: `(${conds.join(' OR ')})`, values: vals };
+}
+
+/**
+ * v2: Build a complete WHERE clause from parsed search params using ? placeholders.
+ */
+export function buildWhereClauseV2(
+  params: ParsedSearchParam[],
+  registry: SearchParameterRegistry,
+  resourceType: string,
+): WhereFragment | null {
+  const fragments: WhereFragment[] = [];
+
+  for (const param of params) {
+    // Skip chained search in v2 MVP (can be added later)
+    if (param.chain) continue;
+
+    const impl = resolveImplV2(param, registry, resourceType);
+    if (!impl) continue;
+
+    const fragment = buildWhereFragmentV2(impl, param);
+    if (fragment) {
+      fragments.push(fragment);
+    }
+  }
+
+  if (fragments.length === 0) return null;
+
+  const sql = fragments.map(f => f.sql).join(' AND ');
+  const values = fragments.flatMap(f => f.values);
+  return { sql, values };
+}
+
+/**
+ * v2: Resolve a SearchParameterImpl for special + registry params.
+ */
+function resolveImplV2(
+  param: ParsedSearchParam,
+  registry: SearchParameterRegistry,
+  resourceType: string,
+): SearchParameterImpl | null {
+  switch (param.code) {
+    case '_id':
+      return { code: '_id', type: 'uri', resourceTypes: [resourceType], expression: 'id', strategy: 'column', columnName: 'id', columnType: 'TEXT', array: false };
+    case '_lastUpdated':
+      return { code: '_lastUpdated', type: 'date', resourceTypes: [resourceType], expression: 'meta.lastUpdated', strategy: 'column', columnName: 'lastUpdated', columnType: 'TEXT', array: false };
+    case '_tag':
+      return { code: '_tag', type: 'token', resourceTypes: [resourceType], expression: 'meta.tag', strategy: 'token-column', columnName: '_tag', columnType: 'TEXT', array: true };
+    case '_security':
+      return { code: '_security', type: 'token', resourceTypes: [resourceType], expression: 'meta.security', strategy: 'token-column', columnName: '_security', columnType: 'TEXT', array: true };
+    case '_profile':
+      return { code: '_profile', type: 'uri', resourceTypes: [resourceType], expression: 'meta.profile', strategy: 'column', columnName: '_profile', columnType: 'TEXT', array: true };
+    case '_source':
+      return { code: '_source', type: 'uri', resourceTypes: [resourceType], expression: 'meta.source', strategy: 'column', columnName: '_source', columnType: 'TEXT', array: false };
+    default:
+      return registry.getImpl(resourceType, param.code) ?? null;
+  }
+}

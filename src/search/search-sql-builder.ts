@@ -275,3 +275,123 @@ function reindexParams(sql: string, paramCount: number, startIndex: number): str
 
   return result;
 }
+
+// =============================================================================
+// Section 6: v2 Search SQL Builder (SQLite ? placeholders, no projectId)
+// =============================================================================
+
+import { buildWhereClauseV2 } from './where-builder.js';
+
+/**
+ * v2: Default columns returned by search queries.
+ * Includes versionId (for ETag), no projectId.
+ */
+const SEARCH_COLUMNS_V2 = ['"id"', '"versionId"', '"content"', '"lastUpdated"', '"deleted"'].join(', ');
+
+/**
+ * v2: Build a complete search SQL query using ? placeholders.
+ * No projectId filter. deleted = 0 (INTEGER).
+ */
+export function buildSearchSQLv2(
+  request: SearchRequest,
+  registry: SearchParameterRegistry,
+): SearchSQL {
+  const tableName = quoteTable(request.resourceType);
+  const parts: string[] = [];
+  const allValues: unknown[] = [];
+
+  parts.push(`SELECT ${SEARCH_COLUMNS_V2}`);
+  parts.push(`FROM ${tableName}`);
+
+  const whereConditions: string[] = [];
+  whereConditions.push('"deleted" = 0');
+
+  // Compartment filter (v2: json_each)
+  if (request.compartment) {
+    whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    allValues.push(request.compartment.id);
+  }
+
+  // Search parameter conditions
+  if (request.params.length > 0) {
+    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType);
+    if (whereFragment) {
+      whereConditions.push(whereFragment.sql);
+      allValues.push(...whereFragment.values);
+    }
+  }
+
+  parts.push(`WHERE ${whereConditions.join(' AND ')}`);
+
+  // ORDER BY
+  const orderBy = buildOrderByV2(request.sort, registry, request.resourceType);
+  parts.push(`ORDER BY ${orderBy}`);
+
+  // LIMIT
+  const count = request.count ?? DEFAULT_SEARCH_COUNT;
+  parts.push('LIMIT ?');
+  allValues.push(count);
+
+  // OFFSET
+  if (request.offset !== undefined && request.offset > 0) {
+    parts.push('OFFSET ?');
+    allValues.push(request.offset);
+  }
+
+  return { sql: parts.join('\n'), values: allValues };
+}
+
+/**
+ * v2: Build a COUNT query using ? placeholders.
+ */
+export function buildCountSQLv2(
+  request: SearchRequest,
+  registry: SearchParameterRegistry,
+): CountSQL {
+  const tableName = quoteTable(request.resourceType);
+  const parts: string[] = [];
+  const allValues: unknown[] = [];
+
+  parts.push('SELECT COUNT(*) AS "count"');
+  parts.push(`FROM ${tableName}`);
+
+  const whereConditions: string[] = [];
+  whereConditions.push('"deleted" = 0');
+
+  if (request.compartment) {
+    whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    allValues.push(request.compartment.id);
+  }
+
+  if (request.params.length > 0) {
+    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType);
+    if (whereFragment) {
+      whereConditions.push(whereFragment.sql);
+      allValues.push(...whereFragment.values);
+    }
+  }
+
+  parts.push(`WHERE ${whereConditions.join(' AND ')}`);
+  return { sql: parts.join('\n'), values: allValues };
+}
+
+/**
+ * v2: Build ORDER BY clause.
+ */
+function buildOrderByV2(
+  sort: SortRule[] | undefined,
+  registry: SearchParameterRegistry,
+  resourceType: string,
+): string {
+  if (!sort || sort.length === 0) {
+    return '"lastUpdated" DESC';
+  }
+  const clauses: string[] = [];
+  for (const rule of sort) {
+    const col = resolveOrderByColumn(rule.code, registry, resourceType);
+    if (col) {
+      clauses.push(`"${col}" ${rule.descending ? 'DESC' : 'ASC'}`);
+    }
+  }
+  return clauses.length > 0 ? clauses.join(', ') : '"lastUpdated" DESC';
+}
