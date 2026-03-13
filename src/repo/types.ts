@@ -338,9 +338,8 @@ export interface ResourceRepository {
 // =============================================================================
 
 /**
- * Shape of a row in the main resource table.
- *
- * Used internally by `buildResourceRow()` and `sql-builder`.
+ * v1 ResourceRow — preserved for backward compatibility with FhirRepository (PG).
+ * @deprecated Use ResourceRowV2 for new code.
  */
 export interface ResourceRow {
   [key: string]: unknown;
@@ -356,7 +355,31 @@ export interface ResourceRow {
 }
 
 /**
- * Shape of a row in the history table.
+ * v2 ResourceRow — dialect-neutral, no projectId/__version.
+ *
+ * Changes from v1:
+ * - Removed `projectId` (no multi-tenancy)
+ * - Removed `__version` (schema version tracking)
+ * - Added `versionId` (UUID for ETag / optimistic locking)
+ * - `deleted` is number (0/1) for SQLite compat
+ * - `_profile` is JSON string, not string[]
+ * - `compartments` is JSON string, not string[]
+ */
+export interface ResourceRowV2 {
+  [key: string]: unknown;
+  id: string;
+  versionId: string;
+  content: string;
+  lastUpdated: string;
+  deleted: number;
+  _source?: string | null;
+  _profile?: string | null;
+  compartments?: string | null;
+}
+
+/**
+ * v1 HistoryRow — preserved for backward compatibility.
+ * @deprecated Use HistoryRowV2 for new code.
  */
 export interface HistoryRow {
   [key: string]: unknown;
@@ -364,6 +387,22 @@ export interface HistoryRow {
   versionId: string;
   lastUpdated: string;
   content: string;
+}
+
+/**
+ * v2 HistoryRow — includes deleted flag.
+ *
+ * Changes from v1:
+ * - Added `deleted` (0/1) for soft-delete tracking
+ * - `content` preserved even on delete (ADR-08)
+ */
+export interface HistoryRowV2 {
+  [key: string]: unknown;
+  id: string;
+  versionId: string;
+  lastUpdated: string;
+  content: string;
+  deleted: number;
 }
 
 /**
