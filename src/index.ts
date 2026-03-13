@@ -46,14 +46,18 @@ export {
   generateCreateHistoryTable,
   generateCreateReferencesTable,
   generateCreateIndex,
+  // @deprecated — use generateResourceDDLv2 instead
   generateResourceDDL,
+  // @deprecated — use generateSchemaDDLv2 instead
   generateSchemaDDL,
+  // @deprecated — use generateSchemaDDLStringv2 instead
   generateSchemaDDLString,
 } from './schema/ddl-generator.js';
 
 // ─── Database ───────────────────────────────────────────────────────────────
 export type { DatabaseConfig } from './db/index.js';
 export { loadDatabaseConfig } from './db/index.js';
+// @deprecated — use SQLiteAdapter or PostgresAdapter via StorageAdapter interface instead
 export { DatabaseClient } from './db/index.js';
 
 // ─── Repository ─────────────────────────────────────────────────────────────
@@ -86,6 +90,7 @@ export {
   ResourceGoneError,
   ResourceVersionConflictError,
 } from './repo/index.js';
+// @deprecated — use FhirPersistence (end-to-end with indexing) or FhirStore (basic CRUD) instead
 export { FhirRepository } from './repo/index.js';
 export { buildHistoryBundle } from './repo/index.js';
 export type { SearchColumnValues } from './repo/index.js';
@@ -123,9 +128,13 @@ export {
   extractPrefix,
   parseSortParam,
   prefixToOperator,
+  // @deprecated — use buildWhereFragmentV2 (? placeholders) instead
   buildWhereFragment,
+  // @deprecated — use buildWhereClauseV2 (? placeholders, chain search) instead
   buildWhereClause,
+  // @deprecated — use buildSearchSQLv2 (? placeholders, no projectId) instead
   buildSearchSQL,
+  // @deprecated — use buildCountSQLv2 (? placeholders) instead
   buildCountSQL,
   buildSearchBundle,
   buildSelfLink,
@@ -143,9 +152,11 @@ export type {
   BundleResponseEntry,
   BundleResponse,
 } from './repo/index.js';
+/** @deprecated Use BundleProcessorV2 (via FhirPersistence) instead. */
 export { processTransaction, processBatch } from './repo/index.js';
 
 // ─── Migrations ─────────────────────────────────────────────────────────────
+/** @deprecated Use {@link MigrationRunnerV2} (StorageAdapter-based) instead. */
 export { MigrationRunner } from './migrations/index.js';
 export type {
   Migration,
@@ -214,6 +225,13 @@ export { ValueSetRepo } from './terminology/valueset-repo.js';
 // ─── v2: Platform IG ────────────────────────────────────────────────────────
 export { PLATFORM_SEARCH_PARAMETERS, PLATFORM_PACKAGE_NAME, PLATFORM_PACKAGE_VERSION } from './platform/platform-ig-definitions.js';
 export { buildPlatformTableSets, initializePlatformIG } from './platform/platform-ig-loader.js';
+
+// ─── v2: Search Enhancement (Phase B) ──────────────────────────────────────
+export { buildWhereFragmentV2, buildWhereClauseV2 } from './search/where-builder.js';
+export { buildSearchSQLv2, buildCountSQLv2, buildTwoPhaseSearchSQLv2 } from './search/search-sql-builder.js';
+export type { TwoPhaseSearchSQL } from './search/search-sql-builder.js';
+export type { SearchPlan, SearchPlannerOptions } from './search/search-planner.js';
+export { planSearch } from './search/search-planner.js';
 
 // ─── v2: Production Hardening ───────────────────────────────────────────────
 export { ResourceCacheV2 } from './cache/resource-cache.js';

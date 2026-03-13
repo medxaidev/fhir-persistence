@@ -395,3 +395,102 @@ function buildOrderByV2(
   }
   return clauses.length > 0 ? clauses.join(', ') : '"lastUpdated" DESC';
 }
+
+// =============================================================================
+// Section 7: v2 Two-Phase SQL Builder
+// =============================================================================
+
+/**
+ * Result of a two-phase search SQL build.
+ */
+export interface TwoPhaseSearchSQL {
+  /** Phase 1: SELECT id with full WHERE + ORDER BY + LIMIT/OFFSET. */
+  phase1: SearchSQL;
+  /** Phase 2: SELECT content WHERE id IN (?,...). Values are id strings from Phase 1 results. */
+  phase2Template: string;
+}
+
+/**
+ * v2: Build two-phase search SQL for improved performance on large tables.
+ *
+ * ## Strategy
+ *
+ * **Phase 1** — Lightweight id-only query with all filters, sorting, and pagination.
+ * Only reads the indexed columns, avoiding expensive content deserialization.
+ *
+ * ```sql
+ * SELECT "id" FROM "Patient"
+ * WHERE "deleted" = 0 AND "birthdate" >= ?
+ * ORDER BY "lastUpdated" DESC
+ * LIMIT ?
+ * ```
+ *
+ * **Phase 2** — Fetch full content for matched ids (executed by caller).
+ *
+ * ```sql
+ * SELECT "id", "versionId", "content", "lastUpdated", "deleted"
+ * FROM "Patient"
+ * WHERE "id" IN (?, ?, ?)
+ * ```
+ *
+ * @param request - The parsed search request.
+ * @param registry - The SearchParameterRegistry.
+ * @returns TwoPhaseSearchSQL with phase1 query and phase2 template.
+ */
+export function buildTwoPhaseSearchSQLv2(
+  request: SearchRequest,
+  registry: SearchParameterRegistry,
+): TwoPhaseSearchSQL {
+  const tableName = quoteTable(request.resourceType);
+
+  // --- Phase 1: id-only query ---
+  const p1Parts: string[] = [];
+  const p1Values: unknown[] = [];
+
+  p1Parts.push(`SELECT "id"`);
+  p1Parts.push(`FROM ${tableName}`);
+
+  const whereConditions: string[] = [];
+  whereConditions.push('"deleted" = 0');
+
+  if (request.compartment) {
+    whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    p1Values.push(request.compartment.id);
+  }
+
+  if (request.params.length > 0) {
+    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType);
+    if (whereFragment) {
+      whereConditions.push(whereFragment.sql);
+      p1Values.push(...whereFragment.values);
+    }
+  }
+
+  p1Parts.push(`WHERE ${whereConditions.join(' AND ')}`);
+
+  const orderBy = buildOrderByV2(request.sort, registry, request.resourceType);
+  p1Parts.push(`ORDER BY ${orderBy}`);
+
+  const count = request.count ?? DEFAULT_SEARCH_COUNT;
+  p1Parts.push('LIMIT ?');
+  p1Values.push(count);
+
+  if (request.offset !== undefined && request.offset > 0) {
+    p1Parts.push('OFFSET ?');
+    p1Values.push(request.offset);
+  }
+
+  const phase1: SearchSQL = {
+    sql: p1Parts.join('\n'),
+    values: p1Values,
+  };
+
+  // --- Phase 2 template: fetch content by ids ---
+  const phase2Template = [
+    `SELECT ${SEARCH_COLUMNS_V2}`,
+    `FROM ${tableName}`,
+    `WHERE "id" IN (%PLACEHOLDERS%)`,
+  ].join('\n');
+
+  return { phase1, phase2Template };
+}

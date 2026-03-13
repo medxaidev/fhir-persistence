@@ -1156,6 +1156,65 @@ function buildLikeFragmentV2(col: string, values: string[], prefix: string, suff
 }
 
 /**
+ * v2: Build a WHERE fragment for chained search using ? placeholders.
+ *
+ * Chained search: `subject:Patient.name=Smith`
+ * Generated SQL (SQLite):
+ * ```sql
+ * EXISTS (
+ *   SELECT 1 FROM "Observation_References" __ref
+ *   JOIN "Patient" __target ON __ref."targetId" = __target."id"
+ *   WHERE __ref."resourceId" = "Observation"."id"
+ *     AND __ref."code" = ?
+ *     AND __target."deleted" = 0
+ *     AND <target param condition>
+ * )
+ * ```
+ */
+function buildChainedFragmentV2(
+  param: ParsedSearchParam,
+  chain: ChainedSearchTarget,
+  registry: SearchParameterRegistry,
+  sourceResourceType: string,
+): WhereFragment | null {
+  // Resolve the target param implementation on the TARGET resource type
+  const targetImpl = resolveImplV2(
+    { code: chain.targetParam, values: param.values, modifier: param.modifier, prefix: param.prefix },
+    registry,
+    chain.targetType,
+  );
+  if (!targetImpl) return null;
+
+  // Build the inner WHERE condition for the target table
+  const innerParam: ParsedSearchParam = {
+    code: chain.targetParam,
+    values: param.values,
+    modifier: param.modifier,
+    prefix: param.prefix,
+  };
+
+  const innerFragment = buildWhereFragmentV2(targetImpl, innerParam);
+  if (!innerFragment) return null;
+
+  // Rewrite the inner SQL to prefix column names with __target.
+  const innerSql = rewriteColumnRefsForAlias(innerFragment.sql, '__target');
+
+  const refTable = `${sourceResourceType}_References`;
+  const sql = [
+    `EXISTS (`,
+    `  SELECT 1 FROM "${refTable}" __ref`,
+    `  JOIN "${chain.targetType}" __target ON __ref."targetId" = __target."id"`,
+    `  WHERE __ref."resourceId" = "${sourceResourceType}"."id"`,
+    `    AND __ref."code" = ?`,
+    `    AND __target."deleted" = 0`,
+    `    AND ${innerSql}`,
+    `)`,
+  ].join('\n');
+
+  return { sql, values: [param.code, ...innerFragment.values] };
+}
+
+/**
  * v2: Build a complete WHERE clause from parsed search params using ? placeholders.
  */
 export function buildWhereClauseV2(
@@ -1166,8 +1225,14 @@ export function buildWhereClauseV2(
   const fragments: WhereFragment[] = [];
 
   for (const param of params) {
-    // Skip chained search in v2 MVP (can be added later)
-    if (param.chain) continue;
+    // Handle chained search parameters (subject:Patient.name=Smith)
+    if (param.chain) {
+      const fragment = buildChainedFragmentV2(param, param.chain, registry, resourceType);
+      if (fragment) {
+        fragments.push(fragment);
+      }
+      continue;
+    }
 
     const impl = resolveImplV2(param, registry, resourceType);
     if (!impl) continue;
