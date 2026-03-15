@@ -75,6 +75,7 @@ export function buildWhereFragment(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
   startIndex: number,
+  resourceType?: string,
 ): WhereFragment | null {
   // Handle :missing modifier (any type)
   if (param.modifier === 'missing') {
@@ -83,7 +84,7 @@ export function buildWhereFragment(
 
   // Lookup-table strategy — search the __<name>Sort column
   if (impl.strategy === 'lookup-table') {
-    return buildLookupTableFragment(impl, param, startIndex);
+    return buildLookupTableFragment(impl, param, startIndex, resourceType ?? 'Resource');
   }
 
   // Dispatch by strategy
@@ -271,6 +272,7 @@ function buildLookupTableFragment(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
   startIndex: number,
+  resourceType: string,
 ): WhereFragment {
   const mapping = LOOKUP_TABLE_MAP[impl.code];
 
@@ -289,36 +291,37 @@ function buildLookupTableFragment(
   // Build EXISTS subquery against global lookup table
   const { table, column } = mapping;
   const colRef = `__lookup."${column}"`;
+  const outerIdRef = `"${resourceType}"."id"`;
 
   if (param.modifier === 'exact') {
     // Exact: direct equality
     if (param.values.length === 1) {
-      const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND ${colRef} = $${startIndex})`;
+      const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND ${colRef} = $${startIndex})`;
       return { sql, values: [param.values[0]] };
     }
     const conditions = param.values.map((_, i) => `${colRef} = $${startIndex + i}`);
-    const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conditions.join(' OR ')}))`;
+    const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${conditions.join(' OR ')}))`;
     return { sql, values: [...param.values] };
   }
 
   if (param.modifier === 'contains') {
     // Contains: ILIKE '%value%'
     if (param.values.length === 1) {
-      const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(${colRef}) LIKE $${startIndex})`;
+      const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND LOWER(${colRef}) LIKE $${startIndex})`;
       return { sql, values: [`%${param.values[0].toLowerCase()}%`] };
     }
     const conditions = param.values.map((_, i) => `LOWER(${colRef}) LIKE $${startIndex + i}`);
-    const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conditions.join(' OR ')}))`;
+    const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${conditions.join(' OR ')}))`;
     return { sql, values: param.values.map(v => `%${v.toLowerCase()}%`) };
   }
 
   // Default: prefix match (ILIKE 'value%')
   if (param.values.length === 1) {
-    const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(${colRef}) LIKE $${startIndex})`;
+    const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND LOWER(${colRef}) LIKE $${startIndex})`;
     return { sql, values: [`${param.values[0].toLowerCase()}%`] };
   }
   const conditions = param.values.map((_, i) => `LOWER(${colRef}) LIKE $${startIndex + i}`);
-  const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conditions.join(' OR ')}))`;
+  const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${conditions.join(' OR ')}))`;
   return { sql, values: param.values.map(v => `${v.toLowerCase()}%`) };
 }
 
@@ -780,7 +783,7 @@ export function buildWhereClause(
       continue;
     }
 
-    const fragment = buildWhereFragment(impl, param, paramIndex);
+    const fragment = buildWhereFragment(impl, param, paramIndex, resourceType);
     if (fragment) {
       fragments.push(fragment);
       paramIndex += fragment.values.length;
@@ -938,13 +941,14 @@ export function buildWhereFragmentV2(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
   dialect?: SqlDialect,
+  resourceType?: string,
 ): WhereFragment | null {
   if (param.modifier === 'missing') {
     return buildMissingFragmentV2(impl, param);
   }
 
   if (impl.strategy === 'lookup-table') {
-    return buildLookupTableFragmentV2(impl, param);
+    return buildLookupTableFragmentV2(impl, param, resourceType ?? 'Resource');
   }
 
   if (impl.strategy === 'token-column') {
@@ -984,6 +988,7 @@ function buildMissingFragmentV2(
 function buildLookupTableFragmentV2(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
+  resourceType: string,
 ): WhereFragment {
   const mapping = LOOKUP_TABLE_MAP[impl.code];
   if (!mapping) {
@@ -994,26 +999,27 @@ function buildLookupTableFragmentV2(
   }
   const { table, column } = mapping;
   const colRef = `__lookup."${column}"`;
+  const outerIdRef = `"${resourceType}"."id"`;
   if (param.modifier === 'exact') {
     if (param.values.length === 1) {
-      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND ${colRef} = ?)`, values: [param.values[0]] };
+      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND ${colRef} = ?)`, values: [param.values[0]] };
     }
     const conds = param.values.map(() => `${colRef} = ?`);
-    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conds.join(' OR ')}))`, values: [...param.values] };
+    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${conds.join(' OR ')}))`, values: [...param.values] };
   }
   if (param.modifier === 'contains') {
     if (param.values.length === 1) {
-      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(${colRef}) LIKE ?)`, values: [`%${param.values[0].toLowerCase()}%`] };
+      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND LOWER(${colRef}) LIKE ?)`, values: [`%${param.values[0].toLowerCase()}%`] };
     }
     const conds = param.values.map(() => `LOWER(${colRef}) LIKE ?`);
-    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conds.join(' OR ')}))`, values: param.values.map(v => `%${v.toLowerCase()}%`) };
+    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${conds.join(' OR ')}))`, values: param.values.map(v => `%${v.toLowerCase()}%`) };
   }
   // default prefix match
   if (param.values.length === 1) {
-    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(${colRef}) LIKE ?)`, values: [`${param.values[0].toLowerCase()}%`] };
+    return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND LOWER(${colRef}) LIKE ?)`, values: [`${param.values[0].toLowerCase()}%`] };
   }
   const conds = param.values.map(() => `LOWER(${colRef}) LIKE ?`);
-  return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = "id" AND (${conds.join(' OR ')}))`, values: param.values.map(v => `${v.toLowerCase()}%`) };
+  return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${conds.join(' OR ')}))`, values: param.values.map(v => `${v.toLowerCase()}%`) };
 }
 
 // -- v2 string --
@@ -1274,7 +1280,7 @@ export function buildWhereClauseV2(
     const impl = resolveImplV2(param, registry, resourceType);
     if (!impl) continue;
 
-    const fragment = buildWhereFragmentV2(impl, param, dialect);
+    const fragment = buildWhereFragmentV2(impl, param, dialect, resourceType);
     if (fragment) {
       fragments.push(fragment);
     }

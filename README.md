@@ -5,7 +5,7 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 [![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-> **v0.4.0** — Full PostgreSQL DDL compatibility for all system and lookup tables
+> **v0.5.0** — PostgreSQL migration path complete: GIN extensions + lookup table fixes
 
 ## Features
 

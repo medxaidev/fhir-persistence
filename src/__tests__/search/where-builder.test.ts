@@ -277,9 +277,9 @@ describe('buildWhereFragment — lookup-table', () => {
   it('searches HumanName global table for lookup-table strategy', () => {
     const impl = makeImpl({ code: 'name', type: 'string', columnName: 'name', strategy: 'lookup-table' });
     const param: ParsedSearchParam = { code: 'name', values: ['Smith'] };
-    const result = buildWhereFragment(impl, param, 1);
+    const result = buildWhereFragment(impl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(__lookup."name") LIKE $1)');
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND LOWER(__lookup."name") LIKE $1)');
     expect(result!.values).toEqual(['smith%']);
   });
 });
@@ -576,31 +576,31 @@ describe('Phase 17 — lookup-table strategy', () => {
 
   it('name prefix search generates EXISTS on HumanName table', () => {
     const param: ParsedSearchParam = { code: 'name', values: ['Smith'] };
-    const result = buildWhereFragment(nameImpl, param, 1);
+    const result = buildWhereFragment(nameImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(__lookup."name") LIKE $1)');
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND LOWER(__lookup."name") LIKE $1)');
     expect(result!.values).toEqual(['smith%']);
   });
 
   it('name :exact generates EXISTS with equality on HumanName table', () => {
     const param: ParsedSearchParam = { code: 'name', modifier: 'exact', values: ['Smith'] };
-    const result = buildWhereFragment(nameImpl, param, 1);
+    const result = buildWhereFragment(nameImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "id" AND __lookup."name" = $1)');
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND __lookup."name" = $1)');
     expect(result!.values).toEqual(['Smith']);
   });
 
   it('name :contains generates EXISTS with LIKE wildcards on HumanName table', () => {
     const param: ParsedSearchParam = { code: 'name', modifier: 'contains', values: ['mit'] };
-    const result = buildWhereFragment(nameImpl, param, 1);
+    const result = buildWhereFragment(nameImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(__lookup."name") LIKE $1)');
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND LOWER(__lookup."name") LIKE $1)');
     expect(result!.values).toEqual(['%mit%']);
   });
 
   it('multiple values generate OR clause with EXISTS', () => {
     const param: ParsedSearchParam = { code: 'name', values: ['Smith', 'Jones'] };
-    const result = buildWhereFragment(nameImpl, param, 1);
+    const result = buildWhereFragment(nameImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
     expect(result!.sql).toContain('OR');
     expect(result!.sql).toContain('LOWER(__lookup."name") LIKE $1');
@@ -610,17 +610,17 @@ describe('Phase 17 — lookup-table strategy', () => {
 
   it('address search uses EXISTS on Address table', () => {
     const param: ParsedSearchParam = { code: 'address', values: ['Main'] };
-    const result = buildWhereFragment(addressImpl, param, 1);
+    const result = buildWhereFragment(addressImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "Address" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(__lookup."address") LIKE $1)');
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "Address" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND LOWER(__lookup."address") LIKE $1)');
     expect(result!.values).toEqual(['main%']);
   });
 
   it('telecom search uses EXISTS on ContactPoint table', () => {
     const param: ParsedSearchParam = { code: 'telecom', values: ['555'] };
-    const result = buildWhereFragment(telecomImpl, param, 1);
+    const result = buildWhereFragment(telecomImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "ContactPoint" __lookup WHERE __lookup."resourceId" = "id" AND LOWER(__lookup."value") LIKE $1)');
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "ContactPoint" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND LOWER(__lookup."value") LIKE $1)');
     expect(result!.values).toEqual(['555%']);
   });
 });

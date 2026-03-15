@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-03-16
+
+### Fixed
+
+#### PostgreSQL Migration Path Fixes
+
+- **`migration-generator.ts`** — IG migration path now creates PostgreSQL extensions (`pg_trgm`, `btree_gin`) and helper function (`token_array_to_text`) before generating GIN indexes, fixing "no default operator class for access method gin" error
+- **`where-builder.ts`** — Lookup table EXISTS subqueries now use fully-qualified `"ResourceType"."id"` instead of ambiguous `"id"`, fixing PostgreSQL "operator does not exist: text = integer" error in name/address/telecom searches
+
+### Changed
+
+- **`buildWhereFragment` (v1)** — Added optional `resourceType` parameter, passed to `buildLookupTableFragment`
+- **`buildWhereFragmentV2` (v2)** — Added optional `resourceType` parameter, passed to `buildLookupTableFragmentV2`
+- Both `buildLookupTableFragment*` functions now generate `outerIdRef = "ResourceType"."id"` to eliminate column name ambiguity in PostgreSQL
+
+### Test Coverage
+
+- **1014 total tests** (1006 passing, 8 skipped) across 56 test files — no regressions
+- Updated 7 lookup table test assertions to use qualified column references
+
 ## [0.4.0] - 2025-03-15
 
 ### Fixed

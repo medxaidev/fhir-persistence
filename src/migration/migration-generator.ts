@@ -58,6 +58,16 @@ export function generateMigration(
   const reindexDeltas: SchemaDelta[] = [];
   const descriptions: string[] = [];
 
+  // PostgreSQL: ensure required extensions exist before GIN indexes
+  const needsPgExtensions = deltas.some(d => d.kind === 'ADD_TABLE' || d.kind === 'ADD_INDEX');
+  if (dialect === 'postgres' && needsPgExtensions) {
+    up.push('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+    up.push('CREATE EXTENSION IF NOT EXISTS btree_gin;');
+    up.push(
+      `CREATE OR REPLACE FUNCTION token_array_to_text(arr text[]) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT array_to_string(arr, ' ') $$;`,
+    );
+  }
+
   for (const delta of deltas) {
     switch (delta.kind) {
       case 'ADD_TABLE': {

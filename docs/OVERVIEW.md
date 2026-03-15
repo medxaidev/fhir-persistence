@@ -301,7 +301,7 @@ Key test suites:
 
 ## What's Next
 
-`fhir-persistence` v0.4.0 is the foundation for:
+`fhir-persistence` v0.5.0 is the foundation for:
 
 - **fhir-engine** — central orchestrator that bootstraps definition + runtime + persistence
 - **fhir-server** — HTTP FHIR R4 REST API
