@@ -1,8 +1,8 @@
 /**
- * Bundle Processor v2 Integration Tests â€” 12 tests on SQLite in-memory.
+ * Bundle Processor v2 Integration Tests â€?12 tests on SQLite in-memory.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { FhirStore } from '../../store/fhir-store.js';
 import { processTransactionV2, processBatchV2 } from '../../transaction/bundle-processor.js';
 import type { Bundle, BundleEntry } from '../../transaction/bundle-processor.js';
@@ -67,11 +67,11 @@ const DDL = [
 ];
 
 describe('Bundle Processor v2 (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let store: FhirStore;
 
   beforeEach(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     store = new FhirStore(adapter);
     for (const ddl of DDL) {
       await adapter.execute(ddl);
@@ -206,14 +206,14 @@ describe('Bundle Processor v2 (SQLite integration)', () => {
           request: { method: 'POST', url: 'Patient' },
         },
         {
-          // PUT without resource â†’ will fail
+          // PUT without resource â†?will fail
           request: { method: 'PUT', url: 'Patient/nonexistent' },
         },
       ],
     };
 
     const result = await processTransactionV2(store, adapter, bundle);
-    // Transaction failed â†’ error response
+    // Transaction failed â†?error response
     expect(result.entry[0].response.status).toBe('500');
 
     // No Patient should have been created (rolled back)
@@ -299,7 +299,7 @@ describe('Bundle Processor v2 (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 9. If-None-Exist: 0 matches â†’ create
+  // 9. If-None-Exist: 0 matches â†?create
   // =========================================================================
   it('If-None-Exist with 0 matches creates resource', async () => {
     const bundle: Bundle = {
@@ -319,7 +319,7 @@ describe('Bundle Processor v2 (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 10. If-None-Exist: 1 match â†’ return existing (200)
+  // 10. If-None-Exist: 1 match â†?return existing (200)
   // =========================================================================
   it('If-None-Exist with 1 match returns existing resource', async () => {
     await store.createResource('Patient', { resourceType: 'Patient' } as any, { assignedId: 'existing-1' });
@@ -341,7 +341,7 @@ describe('Bundle Processor v2 (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 11. If-None-Exist: multiple matches â†’ 412
+  // 11. If-None-Exist: multiple matches â†?412
   // =========================================================================
   it('If-None-Exist with multiple matches returns 412', async () => {
     // Create two patients that will match a content-based search

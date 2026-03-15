@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { SearchParameterRegistry } from '../../registry/search-parameter-registry.js';
 import { FhirPersistence } from '../../store/fhir-persistence.js';
 import {
@@ -37,7 +37,7 @@ function createRegistry(): SearchParameterRegistry {
   return reg;
 }
 
-async function setupTables(adapter: SQLiteAdapter): Promise<void> {
+async function setupTables(adapter: BetterSqlite3Adapter): Promise<void> {
   // Patient
   await adapter.execute(`
     CREATE TABLE "Patient" (
@@ -118,11 +118,11 @@ async function setupTables(adapter: SQLiteAdapter): Promise<void> {
 // =============================================================================
 
 describe('FhirPersistence v2 (end-to-end)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let persistence: FhirPersistence;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     await setupTables(adapter);
     const registry = createRegistry();

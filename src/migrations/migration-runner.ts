@@ -267,11 +267,11 @@ export class MigrationRunnerV2 {
   }
 
   private async applyMigration(migration: MigrationV2): Promise<void> {
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       for (const sql of migration.up) {
-        tx.execute(sql);
+        await tx.execute(sql);
       }
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "${TRACKING_TABLE_V2}" ("version", "description", "type") VALUES (?, ?, ?)`,
         [migration.version, migration.description, migration.type],
       );
@@ -279,11 +279,11 @@ export class MigrationRunnerV2 {
   }
 
   private async revertMigration(migration: MigrationV2): Promise<void> {
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       for (const sql of migration.down) {
-        tx.execute(sql);
+        await tx.execute(sql);
       }
-      tx.execute(
+      await tx.execute(
         `DELETE FROM "${TRACKING_TABLE_V2}" WHERE "version" = ?`,
         [migration.version],
       );

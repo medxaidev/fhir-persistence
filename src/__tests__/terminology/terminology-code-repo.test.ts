@@ -2,16 +2,16 @@
  * Terminology Code Repo Tests — 12 tests on SQLite in-memory.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { TerminologyCodeRepo } from '../../terminology/terminology-code-repo.js';
 import type { TerminologyCode } from '../../terminology/terminology-code-repo.js';
 
 describe('TerminologyCodeRepo (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let repo: TerminologyCodeRepo;
 
   beforeEach(() => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     repo = new TerminologyCodeRepo(adapter);
   });
 

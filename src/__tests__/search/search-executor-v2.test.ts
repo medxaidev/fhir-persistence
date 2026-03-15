@@ -1,10 +1,10 @@
 /**
- * Search Executor v2 Integration Tests â€” 12 tests on SQLite in-memory.
+ * Search Executor v2 Integration Tests â€?12 tests on SQLite in-memory.
  *
  * Uses real SQLite adapter + FhirStore for data setup + executeSearchV2.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { FhirStore } from '../../store/fhir-store.js';
 import { executeSearchV2 } from '../../search/search-executor.js';
 import type { SearchRequest } from '../../search/types.js';
@@ -129,7 +129,7 @@ const registry: SearchParameterRegistry = {
 
 /** Create a patient via FhirStore then manually set search columns. */
 async function createPatient(
-  adapter: SQLiteAdapter,
+  adapter: BetterSqlite3Adapter,
   store: FhirStore,
   data: { id: string; gender?: string; birthdate?: string },
 ) {
@@ -154,11 +154,11 @@ async function createPatient(
 }
 
 describe('Search Executor v2 (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let store: FhirStore;
 
   beforeEach(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     store = new FhirStore(adapter);
     for (const ddl of DDL) {
       await adapter.execute(ddl);
@@ -286,7 +286,7 @@ describe('Search Executor v2 (SQLite integration)', () => {
       sort: [{ code: 'birthdate', descending: false }],
     };
     const result = await executeSearchV2(adapter, request, registry);
-    // Need to filter out null birthdates â€” all 3 have birthdates
+    // Need to filter out null birthdates â€?all 3 have birthdates
     expect(result.resources).toHaveLength(3);
     const dates = result.resources.map(r => (r as any).birthDate);
     // Should be ascending: 1990, 2000, 2010
@@ -378,7 +378,7 @@ describe('Search Executor v2 (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 11. OR semantics â€” comma-separated values
+  // 11. OR semantics â€?comma-separated values
   // =========================================================================
   it('OR semantics: gender=male,female returns both', async () => {
     await createPatient(adapter, store, { id: 'p1', gender: 'male' });

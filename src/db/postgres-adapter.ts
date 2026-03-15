@@ -142,48 +142,6 @@ export class PostgresAdapter implements StorageAdapter {
       await client.query('BEGIN');
 
       const ctx: TransactionContext = {
-        execute: (sql: string, params: unknown[] = []): { changes: number } => {
-          // TransactionContext methods are synchronous in the interface,
-          // but PG is async. We use a synchronous wrapper that queues.
-          // For real PG usage, the transaction fn should be async.
-          throw new Error('Use async transaction pattern. PostgresAdapter transaction context requires async operations — use transactionAsync() or restructure.');
-        },
-        query: <Q = Record<string, unknown>>(sql: string, params: unknown[] = []): Q[] => {
-          throw new Error('Use async transaction pattern. PostgresAdapter transaction context requires async operations.');
-        },
-        queryOne: <Q = Record<string, unknown>>(sql: string, params: unknown[] = []): Q | undefined => {
-          throw new Error('Use async transaction pattern. PostgresAdapter transaction context requires async operations.');
-        },
-      };
-
-      // The TransactionContext interface has synchronous methods, which doesn't
-      // match PG's async nature. We provide an async-compatible transaction instead.
-      const result = await fn(ctx);
-      await client.query('COMMIT');
-      return result;
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  }
-
-  /**
-   * Async-native transaction for PostgreSQL.
-   *
-   * Unlike the StorageAdapter.transaction() which has synchronous
-   * TransactionContext methods (designed for SQLite), this method
-   * provides async transaction operations matching PG's async nature.
-   */
-  async transactionAsync<R>(fn: (tx: AsyncTransactionContext) => Promise<R>): Promise<R> {
-    this.ensureNotClosed();
-    const client = await this.pool.connect();
-
-    try {
-      await client.query('BEGIN');
-
-      const ctx: AsyncTransactionContext = {
         execute: async (sql: string, params: unknown[] = []): Promise<{ changes: number }> => {
           const pgSql = rewritePlaceholders(sql);
           const result = await client.query(pgSql, params);
@@ -226,16 +184,6 @@ export class PostgresAdapter implements StorageAdapter {
   }
 }
 
-// =============================================================================
-// Section 4: Async Transaction Context
-// =============================================================================
-
-/**
- * Async transaction context for PostgreSQL.
- * All methods are async (unlike StorageAdapter's sync TransactionContext).
- */
-export interface AsyncTransactionContext {
-  execute(sql: string, params?: unknown[]): Promise<{ changes: number }>;
-  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
-  queryOne<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | undefined>;
-}
+// AsyncTransactionContext is no longer needed — TransactionContext is now async.
+// Kept as a type alias for backward compatibility.
+export type AsyncTransactionContext = TransactionContext;

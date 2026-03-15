@@ -147,8 +147,7 @@ describe('PostgresAdapter', () => {
     });
     const adapter = new PostgresAdapter(pool);
 
-    // transactionAsync for PG
-    await adapter.transactionAsync(async (tx) => {
+    await adapter.transaction(async (tx) => {
       await tx.execute('INSERT INTO t (id) VALUES (?)', ['1']);
     });
 
@@ -178,7 +177,7 @@ describe('PostgresAdapter', () => {
     });
     const adapter = new PostgresAdapter(pool);
 
-    await expect(adapter.transactionAsync(async (tx) => {
+    await expect(adapter.transaction(async (tx) => {
       await tx.execute('INSERT INTO t (id) VALUES (?)', ['1']);
     })).rejects.toThrow('insert failed');
 

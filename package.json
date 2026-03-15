@@ -1,6 +1,6 @@
 {
   "name": "fhir-persistence",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Embedded FHIR R4 persistence layer — CRUD, search, indexing, schema migration over SQLite and PostgreSQL",
   "homepage": "https://github.com/medxaidev/fhir-persistence#readme",
   "license": "MIT",
@@ -67,18 +67,27 @@
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "fhir-definition": "^0.5.0",
-    "fhir-runtime": "^0.8.1",
-    "sql.js": "^1.14.1"
+    "fhir-runtime": "^0.8.1"
   },
   "devDependencies": {
     "@microsoft/api-extractor": "^7.57.7",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "25.2.0",
+    "@types/pg": "^8.18.0",
     "esbuild": "0.27.2",
+    "pg": "^8.20.0",
     "rimraf": "6.1.2",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vitest": "4.0.18"
+  },
+  "peerDependencies": {
+    "pg": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=18.0.0",

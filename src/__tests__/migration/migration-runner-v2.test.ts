@@ -2,15 +2,15 @@
  * Migration Runner v2 Integration Tests — 12 tests on SQLite in-memory.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { MigrationRunnerV2 } from '../../migrations/migration-runner.js';
 import type { MigrationV2 } from '../../migrations/migration-runner.js';
 
 describe('MigrationRunnerV2 (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeEach(() => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
   });
 
   afterEach(async () => {

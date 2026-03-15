@@ -134,14 +134,14 @@ export class BetterSqlite3Adapter implements StorageAdapter {
     const db = this.ensureOpen();
 
     const ctx: TransactionContext = {
-      execute(sql: string, params: unknown[] = []): { changes: number } {
+      async execute(sql: string, params: unknown[] = []): Promise<{ changes: number }> {
         const result = db.prepare(sql).run(...params);
         return { changes: result.changes };
       },
-      query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
+      async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
         return db.prepare(sql).all(...params) as T[];
       },
-      queryOne<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T | undefined {
+      async queryOne<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T | undefined> {
         return db.prepare(sql).get(...params) as T | undefined;
       },
     };

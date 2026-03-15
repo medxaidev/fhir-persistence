@@ -24,6 +24,7 @@ import type { SearchParameterRegistry } from '../registry/search-parameter-regis
 import type { SearchRequest, SearchSQL, CountSQL, SortRule } from './types.js';
 import { DEFAULT_SEARCH_COUNT } from './types.js';
 import { buildWhereClause } from './where-builder.js';
+import type { SqlDialect } from '../db/dialect.js';
 
 // =============================================================================
 // Section 1: Select Columns
@@ -295,6 +296,7 @@ const SEARCH_COLUMNS_V2 = ['"id"', '"versionId"', '"content"', '"lastUpdated"', 
 export function buildSearchSQLv2(
   request: SearchRequest,
   registry: SearchParameterRegistry,
+  dialect?: SqlDialect,
 ): SearchSQL {
   const tableName = quoteTable(request.resourceType);
   const parts: string[] = [];
@@ -306,15 +308,19 @@ export function buildSearchSQLv2(
   const whereConditions: string[] = [];
   whereConditions.push('"deleted" = 0');
 
-  // Compartment filter (v2: json_each)
+  // Compartment filter (dialect-aware)
   if (request.compartment) {
-    whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    if (dialect?.name === 'postgres') {
+      whereConditions.push('"compartments" && ARRAY[?]::text[]');
+    } else {
+      whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    }
     allValues.push(request.compartment.id);
   }
 
   // Search parameter conditions
   if (request.params.length > 0) {
-    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType);
+    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType, dialect);
     if (whereFragment) {
       whereConditions.push(whereFragment.sql);
       allValues.push(...whereFragment.values);
@@ -347,6 +353,7 @@ export function buildSearchSQLv2(
 export function buildCountSQLv2(
   request: SearchRequest,
   registry: SearchParameterRegistry,
+  dialect?: SqlDialect,
 ): CountSQL {
   const tableName = quoteTable(request.resourceType);
   const parts: string[] = [];
@@ -359,12 +366,16 @@ export function buildCountSQLv2(
   whereConditions.push('"deleted" = 0');
 
   if (request.compartment) {
-    whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    if (dialect?.name === 'postgres') {
+      whereConditions.push('"compartments" && ARRAY[?]::text[]');
+    } else {
+      whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    }
     allValues.push(request.compartment.id);
   }
 
   if (request.params.length > 0) {
-    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType);
+    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType, dialect);
     if (whereFragment) {
       whereConditions.push(whereFragment.sql);
       allValues.push(...whereFragment.values);
@@ -440,6 +451,7 @@ export interface TwoPhaseSearchSQL {
 export function buildTwoPhaseSearchSQLv2(
   request: SearchRequest,
   registry: SearchParameterRegistry,
+  dialect?: SqlDialect,
 ): TwoPhaseSearchSQL {
   const tableName = quoteTable(request.resourceType);
 
@@ -454,12 +466,16 @@ export function buildTwoPhaseSearchSQLv2(
   whereConditions.push('"deleted" = 0');
 
   if (request.compartment) {
-    whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    if (dialect?.name === 'postgres') {
+      whereConditions.push('"compartments" && ARRAY[?]::text[]');
+    } else {
+      whereConditions.push('EXISTS (SELECT 1 FROM json_each("compartments") WHERE json_each.value = ?)');
+    }
     p1Values.push(request.compartment.id);
   }
 
   if (request.params.length > 0) {
-    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType);
+    const whereFragment = buildWhereClauseV2(request.params, registry, request.resourceType, dialect);
     if (whereFragment) {
       whereConditions.push(whereFragment.sql);
       p1Values.push(...whereFragment.values);

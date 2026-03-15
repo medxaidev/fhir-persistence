@@ -2,7 +2,7 @@
  * B4: FhirSystem End-to-End Startup Tests
  *
  * Verifies the complete startup flow:
- * DefinitionProvider â†’ Registries â†’ IGPersistenceManager â†’ FhirPersistence ready
+ * DefinitionProvider â†?Registries â†?IGPersistenceManager â†?FhirPersistence ready
  *
  * ADR-01 Â§4.1, ADR-03, ADR-04
  */
@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { FhirSystem } from '../../startup/fhir-system.js';
 import { InMemoryDefinitionProvider } from '../../providers/in-memory-definition-provider.js';
 import { PropertyPathRuntimeProvider } from '../../providers/property-path-runtime-provider.js';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import type { DefinitionProvider, SearchParameterDef, StructureDefinitionDef } from '../../providers/definition-provider.js';
 
 // =============================================================================
@@ -90,10 +90,10 @@ function buildTestProvider(): InMemoryDefinitionProvider {
 // =============================================================================
 
 describe('B4: FhirSystem Startup Flow', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeEach(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1'); // warm up
   });
 
@@ -196,7 +196,7 @@ describe('B4: FhirSystem Startup Flow', () => {
       const r1 = await system.initialize(dp);
       expect(r1.igResult.action).toBe('new');
 
-      // Second init â€” same definitions â†’ consistent
+      // Second init â€?same definitions â†?consistent
       const r2 = await system.initialize(dp);
       expect(r2.igResult.action).toBe('consistent');
       expect(r2.igResult.ddlCount).toBe(0);

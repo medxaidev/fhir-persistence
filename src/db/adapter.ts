@@ -44,13 +44,13 @@ export interface PreparedStatement<T = Record<string, unknown>> {
  */
 export interface TransactionContext {
   /** Execute a write operation within the transaction. */
-  execute(sql: string, params?: unknown[]): { changes: number };
+  execute(sql: string, params?: unknown[]): Promise<{ changes: number }>;
 
   /** Execute a read query within the transaction. */
-  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): T[];
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
 
   /** Execute a read query returning the first row or undefined. */
-  queryOne<T = Record<string, unknown>>(sql: string, params?: unknown[]): T | undefined;
+  queryOne<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | undefined>;
 }
 
 // =============================================================================

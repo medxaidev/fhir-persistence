@@ -6,16 +6,16 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { LookupTableWriter } from '../../repo/lookup-table-writer.js';
 import type { LookupTableRow } from '../../repo/row-indexer.js';
 
 describe('LookupTableWriter v2', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let writer: LookupTableWriter;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     writer = new LookupTableWriter(adapter);
   });

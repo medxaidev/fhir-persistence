@@ -1,15 +1,15 @@
 /**
- * Reindex CLI v2 Tests â€” 12 tests on SQLite in-memory.
+ * Reindex CLI v2 Tests â€?12 tests on SQLite in-memory.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { reindexResourceTypeV2, reindexAllV2 } from '../../cli/reindex.js';
 
 describe('ReindexCLI v2 (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeEach(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     // Create a minimal Patient table
     await adapter.execute(`
       CREATE TABLE "Patient" (

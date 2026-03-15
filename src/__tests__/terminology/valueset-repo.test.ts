@@ -2,15 +2,15 @@
  * ValueSet Repo Tests — 12 tests on SQLite in-memory.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { ValueSetRepo } from '../../terminology/valueset-repo.js';
 
 describe('ValueSetRepo (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let repo: ValueSetRepo;
 
   beforeEach(() => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     repo = new ValueSetRepo(adapter);
   });
 

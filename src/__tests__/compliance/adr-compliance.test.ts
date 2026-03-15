@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 // ─── v2 modules ──────────────────────────────────────────────────────────────
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { SQLiteDialect } from '../../db/sqlite-dialect.js';
 import { PostgresDialect } from '../../db/postgres-dialect.js';
 import { FhirStore } from '../../store/fhir-store.js';
@@ -86,10 +86,10 @@ function createTestSPRegistry(): SearchParameterRegistry {
 // =============================================================================
 
 describe('ADR-02: SQLite & PostgreSQL Strategy', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1'); // ensure init
   });
 
@@ -131,10 +131,10 @@ describe('ADR-02: SQLite & PostgreSQL Strategy', () => {
     );
   });
 
-  it('SQLiteAdapter transaction uses BEGIN IMMEDIATE', async () => {
-    const result = await adapter.transaction((tx) => {
-      tx.execute('CREATE TABLE IF NOT EXISTS "__adr02_test" ("id" TEXT PRIMARY KEY)');
-      tx.execute('INSERT INTO "__adr02_test" VALUES (?)', ['test-1']);
+  it('BetterSqlite3Adapter transaction uses BEGIN IMMEDIATE', async () => {
+    const result = await adapter.transaction(async (tx) => {
+      await tx.execute('CREATE TABLE IF NOT EXISTS "__adr02_test" ("id" TEXT PRIMARY KEY)');
+      await tx.execute('INSERT INTO "__adr02_test" VALUES (?)', ['test-1']);
       return tx.queryOne<{ id: string }>('SELECT "id" FROM "__adr02_test" WHERE "id" = ?', ['test-1']);
     });
     expect(result).toBeDefined();
@@ -198,10 +198,10 @@ describe('ADR-02: SQLite & PostgreSQL Strategy', () => {
 // =============================================================================
 
 describe('ADR-04/13: IG Database & Package Registry', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
   });
 
@@ -233,7 +233,7 @@ describe('ADR-04/13: IG Database & Package Registry', () => {
   });
 
   it('IGPersistenceManager handles fresh install (new)', async () => {
-    const freshAdapter = new SQLiteAdapter(':memory:');
+    const freshAdapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await freshAdapter.execute('SELECT 1');
     const manager = new IGPersistenceManager(freshAdapter, 'sqlite');
     const sdReg = createTestSDRegistry();
@@ -251,7 +251,7 @@ describe('ADR-04/13: IG Database & Package Registry', () => {
   });
 
   it('IGPersistenceManager returns consistent on same checksum', async () => {
-    const adapter2 = new SQLiteAdapter(':memory:');
+    const adapter2 = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter2.execute('SELECT 1');
     const manager = new IGPersistenceManager(adapter2, 'sqlite');
     const sdReg = createTestSDRegistry();
@@ -334,7 +334,7 @@ describe('ADR-05: Platform IG Strategy', () => {
   });
 
   it('platform IG initializes through IGPersistenceManager', async () => {
-    const adapter = new SQLiteAdapter(':memory:');
+    const adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     const { initializePlatformIG } = await import('../../platform/platform-ig-loader.js');
     const result = await initializePlatformIG(adapter);
@@ -364,11 +364,11 @@ describe('ADR-05: Platform IG Strategy', () => {
 // =============================================================================
 
 describe('ADR-07: Persistence CRUD', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let store: FhirStore;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     // Create Patient tables
     await adapter.execute(`
@@ -491,11 +491,11 @@ describe('ADR-07: Persistence CRUD', () => {
 // =============================================================================
 
 describe('ADR-08: Resource Versioning', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let store: FhirStore;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     await adapter.execute(`
       CREATE TABLE "Patient" (
@@ -646,10 +646,10 @@ describe('ADR-11: Reference Resolver', () => {
 // =============================================================================
 
 describe('ADR-12: Terminology Engine', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
   });
 

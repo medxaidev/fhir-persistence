@@ -128,9 +128,14 @@ export {
 
 // ─── Storage Adapter ────────────────────────────────────────────────────────
 export type { StorageAdapter, TransactionContext } from './db/adapter.js';
-export { SQLiteAdapter } from './db/sqlite-adapter.js';
 export { BetterSqlite3Adapter } from './db/better-sqlite3-adapter.js';
 export type { BetterSqlite3Options } from './db/better-sqlite3-adapter.js';
+export { PostgresAdapter } from './db/postgres-adapter.js';
+
+// ─── SQL Dialect ────────────────────────────────────────────────────────────
+export type { SqlDialect } from './db/dialect.js';
+export { SQLiteDialect } from './db/sqlite-dialect.js';
+export { PostgresDialect } from './db/postgres-dialect.js';
 
 // ─── FhirStore (basic CRUD) ─────────────────────────────────────────────────
 export { FhirStore } from './store/fhir-store.js';

@@ -165,7 +165,7 @@ export class ConditionalService {
 
     // Soft-delete each match in a single transaction
     const now = new Date().toISOString();
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       for (const match of matches) {
         const versionId = randomUUID();
         const deleteRow: ResourceRowV2 = {
@@ -185,10 +185,10 @@ export class ConditionalService {
         };
 
         const updateSQL = buildUpdateMainSQLv2(resourceType, deleteRow);
-        tx.execute(updateSQL.sql, updateSQL.values);
+        await tx.execute(updateSQL.sql, updateSQL.values);
 
         const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-        tx.execute(histSQL.sql, histSQL.values);
+        await tx.execute(histSQL.sql, histSQL.values);
       }
     });
 
@@ -260,12 +260,12 @@ export class ConditionalService {
       deleted: 0,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const mainSQL = buildInsertMainSQLv2(resourceType, mainRow);
-      tx.execute(mainSQL.sql, mainSQL.values);
+      await tx.execute(mainSQL.sql, mainSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
     });
 
     return persisted;
@@ -312,12 +312,12 @@ export class ConditionalService {
       deleted: 0,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const updateSQL = buildUpdateMainSQLv2(resourceType, mainRow);
-      tx.execute(updateSQL.sql, updateSQL.values);
+      await tx.execute(updateSQL.sql, updateSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
     });
 
     return persisted;

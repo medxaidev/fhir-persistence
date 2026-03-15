@@ -20,6 +20,7 @@
 import type { SearchParameterImpl } from '../registry/search-parameter-registry.js';
 import type { SearchParameterRegistry } from '../registry/search-parameter-registry.js';
 import type { ParsedSearchParam, WhereFragment, SearchPrefix, ChainedSearchTarget } from './types.js';
+import type { SqlDialect } from '../db/dialect.js';
 
 // =============================================================================
 // Section 1: Prefix → SQL Operator Mapping
@@ -879,20 +880,64 @@ function resolveImpl(
 }
 
 // =============================================================================
-// Section 13: v2 WHERE Builder (SQLite ? placeholders)
+// Section 13: v2 WHERE Builder (dialect-aware)
 // =============================================================================
 
 /**
- * v2: Build a WHERE clause fragment using ? placeholders (SQLite).
+ * Generate an array-contains check using the appropriate dialect syntax.
  *
- * Dispatches to type-specific v2 builders. Key differences from v1:
- * - Uses `?` instead of `$N`
- * - Token search uses `json_each()` instead of `ARRAY[]::text[]`
- * - Array columns use `json_each()` instead of PG array operators
+ * - SQLite:      `EXISTS (SELECT 1 FROM json_each(col) WHERE json_each.value IN (?,?))`
+ * - PostgreSQL:  `col && ARRAY[?,?]::text[]`  (? rewritten to $N by adapter)
+ */
+function arrayContainsV2(col: string, values: unknown[], dialect?: SqlDialect): WhereFragment {
+  if (dialect?.name === 'postgres') {
+    const placeholders = values.map(() => '?').join(', ');
+    return { sql: `${col} && ARRAY[${placeholders}]::text[]`, values: [...values] };
+  }
+  // SQLite: json_each
+  if (values.length === 1) {
+    return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value = ?)`, values: [values[0]] };
+  }
+  const placeholders = values.map(() => '?').join(', ');
+  return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value IN (${placeholders}))`, values: [...values] };
+}
+
+/**
+ * Generate a NOT array-contains check.
+ */
+function arrayNotContainsV2(col: string, values: unknown[], dialect?: SqlDialect): WhereFragment {
+  if (dialect?.name === 'postgres') {
+    const placeholders = values.map(() => '?').join(', ');
+    return { sql: `NOT (${col} && ARRAY[${placeholders}]::text[])`, values: [...values] };
+  }
+  if (values.length === 1) {
+    return { sql: `NOT EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value = ?)`, values: [values[0]] };
+  }
+  const placeholders = values.map(() => '?').join(', ');
+  return { sql: `NOT EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value IN (${placeholders}))`, values: [...values] };
+}
+
+/**
+ * Generate an array-contains-LIKE check for token system| prefix patterns.
+ */
+function arrayContainsLikeV2(col: string, value: string, dialect?: SqlDialect): WhereFragment {
+  if (dialect?.name === 'postgres') {
+    return { sql: `EXISTS (SELECT unnest FROM unnest(${col}) WHERE unnest LIKE ?)`, values: [value] };
+  }
+  return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value LIKE ?)`, values: [value] };
+}
+
+/**
+ * v2: Build a WHERE clause fragment using ? placeholders.
+ *
+ * Dispatches to type-specific v2 builders. Dialect-aware:
+ * - SQLite: json_each() for array columns
+ * - PostgreSQL: native ARRAY operators
  */
 export function buildWhereFragmentV2(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
+  dialect?: SqlDialect,
 ): WhereFragment | null {
   if (param.modifier === 'missing') {
     return buildMissingFragmentV2(impl, param);
@@ -903,7 +948,7 @@ export function buildWhereFragmentV2(
   }
 
   if (impl.strategy === 'token-column') {
-    return buildTokenColumnFragmentV2(impl, param);
+    return buildTokenColumnFragmentV2(impl, param, dialect);
   }
 
   switch (impl.type) {
@@ -915,11 +960,11 @@ export function buildWhereFragmentV2(
     case 'quantity':
       return buildNumberFragmentV2(impl, param);
     case 'reference':
-      return buildReferenceFragmentV2(impl, param);
+      return buildReferenceFragmentV2(impl, param, dialect);
     case 'uri':
-      return buildUriFragmentV2(impl, param);
+      return buildUriFragmentV2(impl, param, dialect);
     case 'token':
-      return buildTokenColumnFragmentV2(impl, param);
+      return buildTokenColumnFragmentV2(impl, param, dialect);
     default:
       return buildDefaultFragmentV2(impl, param);
   }
@@ -1038,15 +1083,11 @@ function buildNumberFragmentV2(
 function buildReferenceFragmentV2(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
+  dialect?: SqlDialect,
 ): WhereFragment {
   const col = quoteColumn(impl.columnName);
-  // For array reference columns in SQLite, use json_each
   if (impl.array) {
-    if (param.values.length === 1) {
-      return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value = ?)`, values: [param.values[0]] };
-    }
-    const placeholders = param.values.map(() => '?').join(', ');
-    return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value IN (${placeholders}))`, values: [...param.values] };
+    return arrayContainsV2(col, param.values, dialect);
   }
   return buildOrFragmentV2(col, '=', param.values);
 }
@@ -1055,22 +1096,20 @@ function buildReferenceFragmentV2(
 function buildUriFragmentV2(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
+  dialect?: SqlDialect,
 ): WhereFragment {
   const col = quoteColumn(impl.columnName);
   if (impl.array) {
-    if (param.values.length === 1) {
-      return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value = ?)`, values: [param.values[0]] };
-    }
-    const placeholders = param.values.map(() => '?').join(', ');
-    return { sql: `EXISTS (SELECT 1 FROM json_each(${col}) WHERE json_each.value IN (${placeholders}))`, values: [...param.values] };
+    return arrayContainsV2(col, param.values, dialect);
   }
   return buildOrFragmentV2(col, '=', param.values);
 }
 
-// -- v2 token (json_each for SQLite) --
+// -- v2 token (dialect-aware) --
 function buildTokenColumnFragmentV2(
   impl: SearchParameterImpl,
   param: ParsedSearchParam,
+  dialect?: SqlDialect,
 ): WhereFragment {
   // v2 token columns: __<name>Text is a JSON array string (TEXT), __<name>Sort is TEXT
   const textCol = quoteColumn(`__${impl.columnName}Text`);
@@ -1088,11 +1127,14 @@ function buildTokenColumnFragmentV2(
     const vals: unknown[] = [];
     for (const value of param.values) {
       if (value.endsWith('|')) {
-        conds.push(`EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value LIKE ?)`);
-        vals.push(value + '%');
+        const frag = arrayContainsLikeV2(textCol, value + '%', dialect);
+        conds.push(frag.sql);
+        vals.push(...frag.values);
       } else {
-        conds.push(`EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value = ?)`);
-        vals.push(value.startsWith('|') ? value.slice(1) : value);
+        const resolved = value.startsWith('|') ? value.slice(1) : value;
+        const frag = arrayContainsV2(textCol, [resolved], dialect);
+        conds.push(frag.sql);
+        vals.push(...frag.values);
       }
     }
     const inner = conds.length === 1 ? conds[0] : `(${conds.join(' OR ')})`;
@@ -1103,19 +1145,11 @@ function buildTokenColumnFragmentV2(
   const resolvedValues = param.values.map(v => v.startsWith('|') ? v.slice(1) : v);
 
   if (param.modifier === 'not') {
-    if (resolvedValues.length === 1) {
-      return { sql: `NOT EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value = ?)`, values: [resolvedValues[0]] };
-    }
-    const placeholders = resolvedValues.map(() => '?').join(', ');
-    return { sql: `NOT EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value IN (${placeholders}))`, values: [...resolvedValues] };
+    return arrayNotContainsV2(textCol, resolvedValues, dialect);
   }
 
   // Default: any value matches
-  if (resolvedValues.length === 1) {
-    return { sql: `EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value = ?)`, values: [resolvedValues[0]] };
-  }
-  const placeholders = resolvedValues.map(() => '?').join(', ');
-  return { sql: `EXISTS (SELECT 1 FROM json_each(${textCol}) WHERE json_each.value IN (${placeholders}))`, values: [...resolvedValues] };
+  return arrayContainsV2(textCol, resolvedValues, dialect);
 }
 
 // -- v2 default --
@@ -1176,6 +1210,7 @@ function buildChainedFragmentV2(
   chain: ChainedSearchTarget,
   registry: SearchParameterRegistry,
   sourceResourceType: string,
+  dialect?: SqlDialect,
 ): WhereFragment | null {
   // Resolve the target param implementation on the TARGET resource type
   const targetImpl = resolveImplV2(
@@ -1193,7 +1228,7 @@ function buildChainedFragmentV2(
     prefix: param.prefix,
   };
 
-  const innerFragment = buildWhereFragmentV2(targetImpl, innerParam);
+  const innerFragment = buildWhereFragmentV2(targetImpl, innerParam, dialect);
   if (!innerFragment) return null;
 
   // Rewrite the inner SQL to prefix column names with __target.
@@ -1222,13 +1257,14 @@ export function buildWhereClauseV2(
   params: ParsedSearchParam[],
   registry: SearchParameterRegistry,
   resourceType: string,
+  dialect?: SqlDialect,
 ): WhereFragment | null {
   const fragments: WhereFragment[] = [];
 
   for (const param of params) {
     // Handle chained search parameters (subject:Patient.name=Smith)
     if (param.chain) {
-      const fragment = buildChainedFragmentV2(param, param.chain, registry, resourceType);
+      const fragment = buildChainedFragmentV2(param, param.chain, registry, resourceType, dialect);
       if (fragment) {
         fragments.push(fragment);
       }
@@ -1238,7 +1274,7 @@ export function buildWhereClauseV2(
     const impl = resolveImplV2(param, registry, resourceType);
     if (!impl) continue;
 
-    const fragment = buildWhereFragmentV2(impl, param);
+    const fragment = buildWhereFragmentV2(impl, param, dialect);
     if (fragment) {
       fragments.push(fragment);
     }

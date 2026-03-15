@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { IndexingPipeline } from '../../repo/indexing-pipeline.js';
 import { SearchParameterRegistry } from '../../registry/search-parameter-registry.js';
 
@@ -18,18 +18,18 @@ function createPatientSPRegistry(): SearchParameterRegistry {
   reg.indexBundle({
     resourceType: 'Bundle',
     entry: [
-      // 'birthdate' â†’ column strategy (date)
+      // 'birthdate' â†?column strategy (date)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Patient-birthdate', name: 'birthdate', code: 'birthdate', base: ['Patient'], type: 'date' as const, expression: 'Patient.birthDate' } },
-      // 'active' â†’ token-column strategy (token, not in LOOKUP_TABLE_PARAMS)
+      // 'active' â†?token-column strategy (token, not in LOOKUP_TABLE_PARAMS)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Patient-active', name: 'active', code: 'active', base: ['Patient'], type: 'token' as const, expression: 'Patient.active' } },
-      // 'subject' â†’ column strategy (reference)
+      // 'subject' â†?column strategy (reference)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Observation-subject', name: 'subject', code: 'subject', base: ['Observation'], type: 'reference' as const, expression: 'Observation.subject', target: ['Patient'] } },
     ],
   });
   return reg;
 }
 
-async function setupPatientTable(adapter: SQLiteAdapter): Promise<void> {
+async function setupPatientTable(adapter: BetterSqlite3Adapter): Promise<void> {
   await adapter.execute(`
     CREATE TABLE "Patient" (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -67,7 +67,7 @@ async function setupPatientTable(adapter: SQLiteAdapter): Promise<void> {
   `);
 }
 
-async function setupObservationTable(adapter: SQLiteAdapter): Promise<void> {
+async function setupObservationTable(adapter: BetterSqlite3Adapter): Promise<void> {
   await adapter.execute(`
     CREATE TABLE "Observation" (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -107,12 +107,12 @@ async function setupObservationTable(adapter: SQLiteAdapter): Promise<void> {
 // =============================================================================
 
 describe('IndexingPipeline v2', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let pipeline: IndexingPipeline;
   let registry: SearchParameterRegistry;
 
   beforeAll(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     registry = createPatientSPRegistry();
     pipeline = new IndexingPipeline(adapter);

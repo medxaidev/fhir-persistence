@@ -240,7 +240,7 @@ async function processEntryInTransaction(
 
       // If-None-Exist: conditional create
       if (entry.request.ifNoneExist) {
-        const matchResult = checkIfNoneExistInTx(tx, resourceType, entry.request.ifNoneExist);
+        const matchResult = await checkIfNoneExistInTx(tx, resourceType, entry.request.ifNoneExist);
         if (matchResult.status !== 'create') {
           return matchResult.response!;
         }
@@ -274,13 +274,13 @@ async function processEntryInTransaction(
       const content = JSON.stringify(persisted);
 
       // INSERT main
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "${resourceType}" ("id", "versionId", "content", "lastUpdated", "deleted", "_source", "_profile") VALUES (?, ?, ?, ?, 0, ?, ?)`,
         [finalId, versionId, content, now, persisted.meta?.source ?? null, persisted.meta?.profile ? JSON.stringify(persisted.meta.profile) : null],
       );
 
       // INSERT history
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "${resourceType}_History" ("id", "versionId", "content", "lastUpdated", "deleted") VALUES (?, ?, ?, ?, 0)`,
         [finalId, versionId, content, now],
       );
@@ -323,27 +323,27 @@ async function processEntryInTransaction(
       const content = JSON.stringify(persisted);
 
       // Check if resource exists
-      const existing = tx.queryOne<{ id: string; deleted: number }>(
+      const existing = await tx.queryOne<{ id: string; deleted: number }>(
         `SELECT "id", "deleted" FROM "${resourceType}" WHERE "id" = ?`,
         [id],
       );
 
       if (existing) {
         // UPDATE
-        tx.execute(
+        await tx.execute(
           `UPDATE "${resourceType}" SET "versionId" = ?, "content" = ?, "lastUpdated" = ?, "deleted" = 0, "_source" = ?, "_profile" = ? WHERE "id" = ?`,
           [versionId, content, now, persisted.meta?.source ?? null, persisted.meta?.profile ? JSON.stringify(persisted.meta.profile) : null, id],
         );
       } else {
         // INSERT (create-on-update / upsert)
-        tx.execute(
+        await tx.execute(
           `INSERT INTO "${resourceType}" ("id", "versionId", "content", "lastUpdated", "deleted", "_source", "_profile") VALUES (?, ?, ?, ?, 0, ?, ?)`,
           [id, versionId, content, now, persisted.meta?.source ?? null, persisted.meta?.profile ? JSON.stringify(persisted.meta.profile) : null],
         );
       }
 
       // INSERT history
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "${resourceType}_History" ("id", "versionId", "content", "lastUpdated", "deleted") VALUES (?, ?, ?, ?, 0)`,
         [id, versionId, content, now],
       );
@@ -364,7 +364,7 @@ async function processEntryInTransaction(
         throw new Error('DELETE requires resource ID');
       }
 
-      const existing = tx.queryOne<{ id: string; content: string; deleted: number }>(
+      const existing = await tx.queryOne<{ id: string; content: string; deleted: number }>(
         `SELECT "id", "content", "deleted" FROM "${resourceType}" WHERE "id" = ?`,
         [id],
       );
@@ -378,18 +378,18 @@ async function processEntryInTransaction(
       const versionId = randomUUID();
 
       // Soft delete: content preserved (ADR-08)
-      tx.execute(
+      await tx.execute(
         `UPDATE "${resourceType}" SET "versionId" = ?, "lastUpdated" = ?, "deleted" = 1 WHERE "id" = ?`,
         [versionId, now, id],
       );
 
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "${resourceType}_History" ("id", "versionId", "content", "lastUpdated", "deleted") VALUES (?, ?, ?, ?, 1)`,
         [id, versionId, existing.content, now],
       );
 
       // Clear references
-      tx.execute(
+      await tx.execute(
         `DELETE FROM "${resourceType}_References" WHERE "resourceId" = ?`,
         [id],
       );
@@ -402,7 +402,7 @@ async function processEntryInTransaction(
         throw new Error('GET requires resource ID');
       }
 
-      const row = tx.queryOne<{ content: string; deleted: number }>(
+      const row = await tx.queryOne<{ content: string; deleted: number }>(
         `SELECT "content", "deleted" FROM "${resourceType}" WHERE "id" = ?`,
         [id],
       );
@@ -438,11 +438,11 @@ async function processEntryInTransaction(
  * - 1 match → { status: 'existing', response } (return 200 with existing)
  * - 2+ matches → { status: 'error', response } (return 412)
  */
-function checkIfNoneExistInTx(
+async function checkIfNoneExistInTx(
   tx: TransactionContext,
   resourceType: string,
   ifNoneExist: string,
-): { status: 'create' | 'existing' | 'error'; response?: BundleResponseEntry } {
+): Promise<{ status: 'create' | 'existing' | 'error'; response?: BundleResponseEntry }> {
   // Parse the query string: "identifier=xxx" or "_id=yyy"
   const params = new URLSearchParams(ifNoneExist);
   const conditions: string[] = [];
@@ -468,7 +468,7 @@ function checkIfNoneExistInTx(
   }
 
   const whereClause = conditions.join(' AND ');
-  const rows = tx.query<{ id: string; content: string; versionId: string; lastUpdated: string }>(
+  const rows = await tx.query<{ id: string; content: string; versionId: string; lastUpdated: string }>(
     `SELECT "id", "content", "versionId", "lastUpdated" FROM "${resourceType}" WHERE "deleted" = 0 AND ${whereClause}`,
     values,
   );

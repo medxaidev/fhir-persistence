@@ -1,8 +1,8 @@
 /**
- * Platform IG Loader Tests â€” 12 tests on SQLite in-memory.
+ * Platform IG Loader Tests â€?12 tests on SQLite in-memory.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { buildPlatformTableSets, initializePlatformIG } from '../../platform/platform-ig-loader.js';
 import { getPackageChecksum } from '../../platform/platform-ig-definitions.js';
 import { PackageRegistryRepo } from '../../registry/package-registry-repo.js';
@@ -40,12 +40,12 @@ describe('buildPlatformTableSets', () => {
     const tableSets = buildPlatformTableSets();
     const user = tableSets.find(ts => ts.resourceType === 'User')!;
     const colNames = user.main.columns.map(c => c.name);
-    // 'display-name' is a string column â†’ camelCase 'displayName'
+    // 'display-name' is a string column â†?camelCase 'displayName'
     expect(colNames).toContain('displayName');
-    // 'user-email' is a token â†’ __userEmail and __userEmailSort
+    // 'user-email' is a token â†?__userEmail and __userEmailSort
     expect(colNames).toContain('__userEmail');
     expect(colNames).toContain('__userEmailSort');
-    // 'active' is a token â†’ __active and __activeSort
+    // 'active' is a token â†?__active and __activeSort
     expect(colNames).toContain('__active');
     expect(colNames).toContain('__activeSort');
   });
@@ -92,10 +92,10 @@ describe('buildPlatformTableSets', () => {
 });
 
 describe('initializePlatformIG (SQLite integration)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeEach(() => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
   });
 
   afterEach(async () => {

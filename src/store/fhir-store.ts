@@ -66,7 +66,7 @@ export interface HistoryOptions {
 // =============================================================================
 
 export class FhirStore {
-  constructor(private readonly adapter: StorageAdapter) {}
+  constructor(private readonly adapter: StorageAdapter) { }
 
   // ---------------------------------------------------------------------------
   // CREATE
@@ -112,12 +112,12 @@ export class FhirStore {
       deleted: 0,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const mainSQL = buildInsertMainSQLv2(resourceType, mainRow);
-      tx.execute(mainSQL.sql, mainSQL.values);
+      await tx.execute(mainSQL.sql, mainSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
     });
 
     return persisted;
@@ -224,16 +224,16 @@ export class FhirStore {
       deleted: 0,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const updateSQL = buildUpdateMainSQLv2(resourceType, mainRow);
-      tx.execute(updateSQL.sql, updateSQL.values);
+      await tx.execute(updateSQL.sql, updateSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
 
       // Clear old references and re-insert (handled externally if needed)
       const delRefSQL = buildDeleteReferencesSQLv2(`${resourceType}_References`);
-      tx.execute(delRefSQL, [id]);
+      await tx.execute(delRefSQL, [id]);
     });
 
     return persisted;
@@ -279,16 +279,16 @@ export class FhirStore {
       deleted: 1,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const updateSQL = buildUpdateMainSQLv2(resourceType, deleteRow);
-      tx.execute(updateSQL.sql, updateSQL.values);
+      await tx.execute(updateSQL.sql, updateSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
 
       // Clear references for deleted resource
       const delRefSQL = buildDeleteReferencesSQLv2(`${resourceType}_References`);
-      tx.execute(delRefSQL, [id]);
+      await tx.execute(delRefSQL, [id]);
     });
   }
 

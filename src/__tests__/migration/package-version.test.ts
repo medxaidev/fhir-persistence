@@ -11,14 +11,14 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PackageRegistryRepo } from '../../registry/package-registry-repo.js';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 
 describe('B5: Package Version Management', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let repo: PackageRegistryRepo;
 
   beforeEach(async () => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
     await adapter.execute('SELECT 1');
     repo = new PackageRegistryRepo(adapter);
   });

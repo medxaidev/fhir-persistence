@@ -1,11 +1,11 @@
 /**
- * Schema Engine v2 Integration Tests â€” 10 tests
+ * Schema Engine v2 Integration Tests â€?10 tests
  *
- * End-to-end: build schema â†’ generate SQLite DDL â†’ execute on real SQLite â†’ INSERT/SELECT.
+ * End-to-end: build schema â†?generate SQLite DDL â†?execute on real SQLite â†?INSERT/SELECT.
  * Uses sql.js in-memory database.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { buildResourceTableSet } from '../../schema/table-schema-builder.js';
 import { generateResourceDDL, generateCreateGlobalLookupTable, generateCreateIndex } from '../../schema/ddl-generator.js';
 import type { StructureDefinitionRegistry } from '../../registry/structure-definition-registry.js';
@@ -28,8 +28,8 @@ function mockSdRegistry(...types: string[]): StructureDefinitionRegistry {
     getAllTypes: () => types.sort(),
     size: types.length,
     clear: () => map.clear(),
-    index: () => {},
-    indexAll: () => {},
+    index: () => { },
+    indexAll: () => { },
   } as any;
 }
 
@@ -62,10 +62,10 @@ const PATIENT_SPS: SearchParameterImpl[] = [
 ];
 
 describe('Schema Engine v2 Integration (SQLite in-memory)', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
 
   beforeEach(() => {
-    adapter = new SQLiteAdapter(':memory:');
+    adapter = new BetterSqlite3Adapter({ path: ':memory:' });
   });
 
   afterEach(async () => {
@@ -220,7 +220,7 @@ describe('Schema Engine v2 Integration (SQLite in-memory)', () => {
       ['pat-2', 'v1', '{}', '2024-01-01T00:00:00Z', 0, tokenFemale],
     );
 
-    // Search: code=male (no system) â†’ should match "|male"
+    // Search: code=male (no system) â†?should match "|male"
     const rows = await adapter.query<{ id: string }>(
       `SELECT "id" FROM "Patient" WHERE EXISTS (SELECT 1 FROM json_each("__gender") WHERE value = ?)`,
       ['|male'],
@@ -316,16 +316,16 @@ describe('Schema Engine v2 Integration (SQLite in-memory)', () => {
     const tableSet = buildResourceTableSet('Observation', sd, sp);
     await executeDDL(generateResourceDDL(tableSet, 'sqlite'));
 
-    await adapter.transaction((tx) => {
-      tx.execute(
+    await adapter.transaction(async (tx) => {
+      await tx.execute(
         `INSERT INTO "Observation" ("id","versionId","content","lastUpdated","deleted") VALUES (?,?,?,?,?)`,
         ['obs-1', 'v1', '{"resourceType":"Observation"}', '2024-01-01T00:00:00Z', 0],
       );
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "Observation_History" ("id","versionId","content","lastUpdated","deleted") VALUES (?,?,?,?,?)`,
         ['obs-1', 'v1', '{"resourceType":"Observation"}', '2024-01-01T00:00:00Z', 0],
       );
-      tx.execute(
+      await tx.execute(
         `INSERT INTO "Observation_References" ("resourceId","targetType","targetId","code") VALUES (?,?,?,?)`,
         ['obs-1', 'Patient', 'pat-1', 'subject'],
       );

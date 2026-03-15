@@ -11,13 +11,10 @@
 export type { StorageAdapter, PreparedStatement, TransactionContext } from './adapter.js';
 export type { SqlDialect } from './dialect.js';
 
-// v2 — SQLite implementation (sql.js — WebAssembly, cross-platform)
-export { SQLiteAdapter } from './sqlite-adapter.js';
-export { SQLiteDialect } from './sqlite-dialect.js';
-
 // v2 — SQLite implementation (better-sqlite3 — native, production)
 export { BetterSqlite3Adapter } from './better-sqlite3-adapter.js';
 export type { BetterSqlite3Options } from './better-sqlite3-adapter.js';
+export { SQLiteDialect } from './sqlite-dialect.js';
 
 // v2 — PostgreSQL implementation
 export { PostgresAdapter, rewritePlaceholders } from './postgres-adapter.js';

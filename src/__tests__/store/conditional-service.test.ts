@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ConditionalService } from '../../store/conditional-service.js';
 import { FhirStore } from '../../store/fhir-store.js';
-import { SQLiteAdapter } from '../../db/sqlite-adapter.js';
+import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { SearchParameterRegistry } from '../../registry/search-parameter-registry.js';
 import { StructureDefinitionRegistry } from '../../registry/structure-definition-registry.js';
 import { buildResourceTableSet } from '../../schema/table-schema-builder.js';
@@ -32,12 +32,12 @@ function makeProfile(type: string) {
 }
 
 async function setupDB(): Promise<{
-  adapter: SQLiteAdapter;
+  adapter: BetterSqlite3Adapter;
   registry: SearchParameterRegistry;
   service: ConditionalService;
   store: FhirStore;
 }> {
-  const adapter = new SQLiteAdapter(':memory:');
+  const adapter = new BetterSqlite3Adapter({ path: ':memory:' });
   await adapter.execute('SELECT 1');
 
   const sdReg = new StructureDefinitionRegistry();
@@ -110,7 +110,7 @@ async function setupDB(): Promise<{
 // =============================================================================
 
 describe('B6: ConditionalService v2', () => {
-  let adapter: SQLiteAdapter;
+  let adapter: BetterSqlite3Adapter;
   let service: ConditionalService;
   let store: FhirStore;
 
@@ -148,7 +148,7 @@ describe('B6: ConditionalService v2', () => {
         gender: 'male',
       });
 
-      // Conditional create with _id of existing resource â†’ should return existing
+      // Conditional create with _id of existing resource â†?should return existing
       const result = await service.conditionalCreate(
         'Patient',
         { resourceType: 'Patient', gender: 'female' } as any,
@@ -298,7 +298,7 @@ describe('B6: ConditionalService v2', () => {
 
   describe('ADR-07: ? placeholders', () => {
     it('all SQL uses ? placeholders (no $N)', async () => {
-      // Verified by passing with SQLiteAdapter which only supports ? placeholders
+      // Verified by passing with BetterSqlite3Adapter which only supports ? placeholders
       const result = await service.conditionalCreate(
         'Patient',
         { resourceType: 'Patient' } as any,

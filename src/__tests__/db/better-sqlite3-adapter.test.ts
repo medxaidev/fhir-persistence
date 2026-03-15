@@ -88,9 +88,9 @@ describe('BetterSqlite3Adapter — Transactions', () => {
   it('commits on success', async () => {
     await adapter.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)');
 
-    await adapter.transaction(tx => {
-      tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
-      tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [2, 'Bob']);
+    await adapter.transaction(async tx => {
+      await tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
+      await tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [2, 'Bob']);
     });
 
     const rows = await adapter.query('SELECT * FROM test');
@@ -101,8 +101,8 @@ describe('BetterSqlite3Adapter — Transactions', () => {
     await adapter.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)');
 
     await expect(
-      adapter.transaction(tx => {
-        tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
+      adapter.transaction(async tx => {
+        await tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
         throw new Error('rollback test');
       }),
     ).rejects.toThrow('rollback test');
@@ -115,7 +115,7 @@ describe('BetterSqlite3Adapter — Transactions', () => {
     await adapter.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)');
     await adapter.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
 
-    const result = await adapter.transaction(tx => {
+    const result = await adapter.transaction(async tx => {
       return tx.query<{ id: number; name: string }>('SELECT * FROM test');
     });
 
@@ -127,7 +127,7 @@ describe('BetterSqlite3Adapter — Transactions', () => {
     await adapter.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)');
     await adapter.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
 
-    const result = await adapter.transaction(tx => {
+    const result = await adapter.transaction(async tx => {
       return tx.queryOne<{ id: number; name: string }>('SELECT * FROM test WHERE id = ?', [1]);
     });
 
@@ -138,9 +138,9 @@ describe('BetterSqlite3Adapter — Transactions', () => {
   it('returns value from transaction', async () => {
     await adapter.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)');
 
-    const count = await adapter.transaction(tx => {
-      tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
-      const row = tx.queryOne<{ c: number }>('SELECT count(*) as c FROM test');
+    const count = await adapter.transaction(async tx => {
+      await tx.execute('INSERT INTO test (id, name) VALUES (?, ?)', [1, 'Alice']);
+      const row = await tx.queryOne<{ c: number }>('SELECT count(*) as c FROM test');
       return row!.c;
     });
 

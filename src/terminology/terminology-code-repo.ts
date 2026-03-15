@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS "terminology_codes_code_idx" ON "${CODES_TABLE}" ("co
 // =============================================================================
 
 export class TerminologyCodeRepo {
-  constructor(private readonly adapter: StorageAdapter) {}
+  constructor(private readonly adapter: StorageAdapter) { }
 
   /**
    * Ensure the terminology_codes table and indexes exist.
@@ -79,10 +79,10 @@ export class TerminologyCodeRepo {
     const chunkSize = 100;
     for (let i = 0; i < codes.length; i += chunkSize) {
       const chunk = codes.slice(i, i + chunkSize);
-      const result = await this.adapter.transaction((tx) => {
+      const result = await this.adapter.transaction(async (tx) => {
         let count = 0;
         for (const c of chunk) {
-          const r = tx.execute(
+          const r = await tx.execute(
             `INSERT OR IGNORE INTO "${CODES_TABLE}" ("system", "code", "display") VALUES (?, ?, ?)`,
             [c.system, c.code, c.display],
           );

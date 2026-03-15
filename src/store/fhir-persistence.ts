@@ -155,12 +155,12 @@ export class FhirPersistence {
       deleted: 0,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const mainSQL = buildInsertMainSQLv2(resourceType, mainRow);
-      tx.execute(mainSQL.sql, mainSQL.values);
+      await tx.execute(mainSQL.sql, mainSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
     });
 
     return persisted;
@@ -272,12 +272,12 @@ export class FhirPersistence {
       deleted: 0,
     };
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const updateSQL = buildUpdateMainSQLv2(resourceType, mainRow);
-      tx.execute(updateSQL.sql, updateSQL.values);
+      await tx.execute(updateSQL.sql, updateSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
     });
 
     return persisted;
@@ -325,12 +325,12 @@ export class FhirPersistence {
     // Clear index data
     await this.pipeline.deleteIndex(resourceType, id);
 
-    await this.adapter.transaction((tx) => {
+    await this.adapter.transaction(async (tx) => {
       const updateSQL = buildUpdateMainSQLv2(resourceType, deleteRow);
-      tx.execute(updateSQL.sql, updateSQL.values);
+      await tx.execute(updateSQL.sql, updateSQL.values);
 
       const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
-      tx.execute(histSQL.sql, histSQL.values);
+      await tx.execute(histSQL.sql, histSQL.values);
     });
   }
 

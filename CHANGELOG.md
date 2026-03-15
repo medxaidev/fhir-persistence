@@ -5,17 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-03-15
+
+### Added
+
+#### PostgreSQL Support
+
+- `PostgresAdapter` — full `StorageAdapter` implementation for PostgreSQL via `pg` Pool
+  - Automatic `?` → `$1, $2, ...` placeholder rewriting
+  - Transaction support via pool client + BEGIN/COMMIT/ROLLBACK
+  - `queryStream` via cursor-like row iteration
+  - Serialization failure retry (40001) with exponential backoff
+  - `close()` guard preventing use-after-close
+- `PostgresDialect` — `SqlDialect` implementation for PostgreSQL
+  - Native `TEXT[]` array operators (`&&`, `@>`) instead of `json_each()`
+  - `GENERATED ALWAYS AS IDENTITY` for history sequence columns
+  - PostgreSQL-native type mappings (TIMESTAMPTZ, TEXT[], BOOLEAN, etc.)
+- 23 PostgreSQL integration tests covering CRUD, transactions, DDL, migrations, search SQL, concurrency, streaming, and NULL handling
+
+#### SQL Dialect Abstraction
+
+- `SqlDialect` interface — abstracts SQL syntax differences between SQLite and PostgreSQL
+- `SQLiteDialect` — `SqlDialect` implementation for SQLite (json_each, AUTOINCREMENT)
+- Dialect-aware WHERE builders: `arrayContainsV2`, `arrayNotContainsV2`, `arrayContainsLikeV2`
+- `buildWhereFragmentV2`, `buildWhereClauseV2` now accept optional `dialect` parameter
+- `buildSearchSQLv2`, `buildCountSQLv2`, `buildTwoPhaseSearchSQLv2` accept optional `dialect`
+- `executeSearchV2` accepts `dialect` via options
+- Compartment filters are dialect-aware (json_each for SQLite, ARRAY operators for PostgreSQL)
+
+### Changed
+
+- `TransactionContext` methods (`execute`, `query`, `queryOne`) are now `async` (Promise-based)
+- All transaction callers updated to `await` transaction operations
+- `BetterSqlite3Adapter` transaction wraps sync operations in async interface
+
+### Removed
+
+- `sql.js` WASM adapter (`SQLiteAdapter`) — replaced by `BetterSqlite3Adapter`
+- `sql.js` dependency removed from `package.json`
+
+### Dependencies
+
+- `pg` ^8.0.0 added as optional peer dependency
+- `pg` ^8.20.0, `@types/pg` ^8.18.0 added as dev dependencies
+
 ## [0.1.0] - 2025-03-13
 
 ### Added
 
 #### Storage Layer
+
 - `StorageAdapter` interface — unified async database abstraction
 - `SQLiteAdapter` — sql.js (WASM) implementation for cross-platform use
 - `BetterSqlite3Adapter` — native better-sqlite3 implementation for production Node.js
 - `SQLiteDialect` / PostgreSQL dialect support for DDL generation
 
 #### CRUD & Persistence
+
 - `FhirStore` — basic CRUD with soft delete and version tracking
 - `FhirPersistence` — end-to-end facade with automatic search indexing
 - `ConditionalService` — conditionalCreate / conditionalUpdate / conditionalDelete
@@ -24,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - History tracking via dedicated `_History` tables
 
 #### Search
+
 - `SearchParameterRegistry` — index FHIR SearchParameter bundles
 - `parseSearchRequest` — parse FHIR search URL query parameters
 - `buildSearchSQLv2` — generate SQL with `?` placeholders (SQLite + PG compatible)
@@ -34,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SearchBundleBuilder` — FHIR Bundle response construction with pagination
 
 #### Indexing
+
 - `IndexingPipeline` — automatic search column population on CRUD
 - `RuntimeProvider` bridge — FHIRPath-driven extraction via `fhir-runtime`
 - `buildSearchColumns` — fallback property-path extraction
@@ -42,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Column strategy, token-column strategy, lookup-table strategy
 
 #### Schema & Migration
+
 - `StructureDefinitionRegistry` — register and resolve FHIR StructureDefinitions
 - `buildResourceTableSet` — StructureDefinition + SearchParameter → table schema
 - DDL generators for Main, History, References tables + indexes
@@ -53,25 +102,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ReindexScheduler` — schedule reindex jobs for SP expression changes
 
 #### Terminology
+
 - `TerminologyCodeRepo` — code system concept storage
 - `ValueSetRepo` — value set expansion storage
 
 #### Platform IG
+
 - Built-in platform resource types: User, Bot, Project, Agent, ClientApplication
 - `initializePlatformIG` — auto-register platform search parameters
 
 #### Provider Bridges (for fhir-engine)
+
 - `FhirDefinitionBridge` — wraps `fhir-definition` `DefinitionRegistry` → `DefinitionProvider`
 - `FhirRuntimeProvider` — wraps `fhir-runtime` `FhirRuntimeInstance` → `RuntimeProvider`
 - `FhirSystem` — end-to-end startup orchestrator
 
 #### Production
+
 - `ResourceCacheV2` — in-memory resource cache with TTL
 - `SearchLogger` — search query logging and diagnostics
 - `reindexResourceTypeV2` / `reindexAllV2` — CLI reindex utilities
 
 ### Dependencies
+
 - `fhir-definition` ^0.5.0
 - `fhir-runtime` ^0.8.1
 - `better-sqlite3` ^12.6.2
-- `sql.js` ^1.14.1

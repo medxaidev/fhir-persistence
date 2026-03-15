@@ -11,6 +11,7 @@ import type { PersistedResource } from '../repo/types.js';
 import type { SearchParameterRegistry } from '../registry/search-parameter-registry.js';
 import type { SearchRequest, IncludeTarget } from './types.js';
 import type { StorageAdapter } from '../db/adapter.js';
+import type { SqlDialect } from '../db/dialect.js';
 import { buildSearchSQLv2, buildCountSQLv2 } from './search-sql-builder.js';
 
 // =============================================================================
@@ -63,10 +64,11 @@ export async function executeSearchV2(
   adapter: StorageAdapter,
   request: SearchRequest,
   registry: SearchParameterRegistry,
-  options?: SearchOptions,
+  options?: SearchOptions & { dialect?: SqlDialect },
 ): Promise<SearchResult> {
+  const dialect = options?.dialect;
   // 1. Build and execute search SQL
-  const searchSQL = buildSearchSQLv2(request, registry);
+  const searchSQL = buildSearchSQLv2(request, registry, dialect);
   const rows = await adapter.query<SearchRowV2>(searchSQL.sql, searchSQL.values);
 
   // 2. Map rows to PersistedResource[]
@@ -75,7 +77,7 @@ export async function executeSearchV2(
   // 3. Optionally get total count
   let total: number | undefined;
   if (options?.total === 'accurate') {
-    const countSQL = buildCountSQLv2(request, registry);
+    const countSQL = buildCountSQLv2(request, registry, dialect);
     const countRow = await adapter.queryOne<{ count: number }>(countSQL.sql, countSQL.values);
     total = countRow?.count ?? 0;
   }
