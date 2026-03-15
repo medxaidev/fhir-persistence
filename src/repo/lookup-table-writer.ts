@@ -16,22 +16,25 @@
  */
 
 import type { StorageAdapter } from '../db/adapter.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 import type { LookupTableRow } from './row-indexer.js';
 
 // =============================================================================
 // Section 1: DDL
 // =============================================================================
 
-const LOOKUP_TABLE_DDL: Record<string, string> = {
-  HumanName: `CREATE TABLE IF NOT EXISTS "HumanName" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+function buildLookupTableDDL(dialect: DDLDialect): Record<string, string> {
+  const pk = dialect === 'postgres' ? '"id" SERIAL PRIMARY KEY' : '"id" INTEGER PRIMARY KEY AUTOINCREMENT';
+  return {
+    HumanName: `CREATE TABLE IF NOT EXISTS "HumanName" (
+  ${pk},
   "resourceId" TEXT NOT NULL,
   "name" TEXT,
   "given" TEXT,
   "family" TEXT
 )`,
-  Address: `CREATE TABLE IF NOT EXISTS "Address" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    Address: `CREATE TABLE IF NOT EXISTS "Address" (
+  ${pk},
   "resourceId" TEXT NOT NULL,
   "address" TEXT,
   "city" TEXT,
@@ -40,20 +43,21 @@ const LOOKUP_TABLE_DDL: Record<string, string> = {
   "state" TEXT,
   "use" TEXT
 )`,
-  ContactPoint: `CREATE TABLE IF NOT EXISTS "ContactPoint" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    ContactPoint: `CREATE TABLE IF NOT EXISTS "ContactPoint" (
+  ${pk},
   "resourceId" TEXT NOT NULL,
   "system" TEXT,
   "value" TEXT,
   "use" TEXT
 )`,
-  Identifier: `CREATE TABLE IF NOT EXISTS "Identifier" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    Identifier: `CREATE TABLE IF NOT EXISTS "Identifier" (
+  ${pk},
   "resourceId" TEXT NOT NULL,
   "system" TEXT,
   "value" TEXT
 )`,
-};
+  };
+}
 
 const LOOKUP_TABLE_INDEXES: Record<string, string[]> = {
   HumanName: [
@@ -88,8 +92,11 @@ const LOOKUP_COLUMNS: Record<string, string[]> = {
 
 export class LookupTableWriter {
   private initialized = false;
+  private readonly ddl: Record<string, string>;
 
-  constructor(private readonly adapter: StorageAdapter) {}
+  constructor(private readonly adapter: StorageAdapter, dialect: DDLDialect = 'sqlite') {
+    this.ddl = buildLookupTableDDL(dialect);
+  }
 
   // ---------------------------------------------------------------------------
   // DDL
@@ -101,8 +108,8 @@ export class LookupTableWriter {
   async ensureTables(): Promise<void> {
     if (this.initialized) return;
 
-    for (const table of Object.keys(LOOKUP_TABLE_DDL)) {
-      await this.adapter.execute(LOOKUP_TABLE_DDL[table]);
+    for (const table of Object.keys(this.ddl)) {
+      await this.adapter.execute(this.ddl[table]);
       for (const idx of LOOKUP_TABLE_INDEXES[table]) {
         await this.adapter.execute(idx);
       }
@@ -164,7 +171,7 @@ export class LookupTableWriter {
   async deleteRows(resourceId: string): Promise<void> {
     await this.ensureTables();
 
-    for (const table of Object.keys(LOOKUP_TABLE_DDL)) {
+    for (const table of Object.keys(this.ddl)) {
       await this.adapter.execute(
         `DELETE FROM "${table}" WHERE "resourceId" = ?`,
         [resourceId],

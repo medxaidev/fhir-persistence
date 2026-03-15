@@ -1,6 +1,6 @@
 # fhir-persistence — Overview
 
-Version: 0.3.0
+Version: 0.4.0
 
 ---
 
@@ -301,9 +301,8 @@ Key test suites:
 
 ## What's Next
 
-`fhir-persistence` v0.3.0 is the foundation for:
+`fhir-persistence` v0.4.0 is the foundation for:
 
-- **Phase D** — Full PostgreSQL compatibility for auxiliary systems (PackageRegistryRepo, TerminologyCodeRepo, MigrationRunnerV2, ReindexScheduler)
 - **fhir-engine** — central orchestrator that bootstraps definition + runtime + persistence
 - **fhir-server** — HTTP FHIR R4 REST API
 - **fhir-cli** — migration and reindex CLI tools

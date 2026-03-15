@@ -15,6 +15,7 @@
  */
 
 import type { StorageAdapter } from '../db/adapter.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 
 // =============================================================================
 // Section 1: Types
@@ -46,29 +47,38 @@ export interface ValueSetInput {
 
 const VALUESETS_TABLE = 'terminology_valuesets';
 
-const CREATE_VALUESETS_TABLE = `
+function createValuesetsTableDDL(dialect: DDLDialect): string {
+  const ts = dialect === 'postgres'
+    ? 'TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP'
+    : "TEXT NOT NULL DEFAULT (datetime('now'))";
+  return `
 CREATE TABLE IF NOT EXISTS "${VALUESETS_TABLE}" (
   "url" TEXT NOT NULL,
   "version" TEXT NOT NULL,
   "name" TEXT,
   "content" TEXT NOT NULL,
-  "storedAt" TEXT NOT NULL DEFAULT (datetime('now')),
+  "storedAt" ${ts},
   PRIMARY KEY ("url", "version")
 );
 `;
+}
 
 // =============================================================================
 // Section 3: ValueSetRepo
 // =============================================================================
 
 export class ValueSetRepo {
-  constructor(private readonly adapter: StorageAdapter) {}
+  private readonly dialect: DDLDialect;
+
+  constructor(private readonly adapter: StorageAdapter, dialect: DDLDialect = 'sqlite') {
+    this.dialect = dialect;
+  }
 
   /**
    * Ensure the terminology_valuesets table exists.
    */
   async ensureTable(): Promise<void> {
-    await this.adapter.execute(CREATE_VALUESETS_TABLE);
+    await this.adapter.execute(createValuesetsTableDDL(this.dialect));
   }
 
   /**
@@ -77,10 +87,10 @@ export class ValueSetRepo {
    */
   async upsert(input: ValueSetInput): Promise<void> {
     await this.ensureTable();
-    await this.adapter.execute(
-      `INSERT OR REPLACE INTO "${VALUESETS_TABLE}" ("url", "version", "name", "content") VALUES (?, ?, ?, ?)`,
-      [input.url, input.version, input.name ?? null, input.content],
-    );
+    const sql = this.dialect === 'postgres'
+      ? `INSERT INTO "${VALUESETS_TABLE}" ("url", "version", "name", "content") VALUES (?, ?, ?, ?) ON CONFLICT ("url", "version") DO UPDATE SET "name" = EXCLUDED."name", "content" = EXCLUDED."content"`
+      : `INSERT OR REPLACE INTO "${VALUESETS_TABLE}" ("url", "version", "name", "content") VALUES (?, ?, ?, ?)`;
+    await this.adapter.execute(sql, [input.url, input.version, input.name ?? null, input.content]);
   }
 
   /**

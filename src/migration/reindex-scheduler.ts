@@ -14,6 +14,7 @@
  */
 
 import type { StorageAdapter } from '../db/adapter.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 import type { SchemaDelta } from './schema-diff.js';
 
 // =============================================================================
@@ -49,7 +50,23 @@ export interface ReindexJob {
 
 const REINDEX_JOBS_TABLE = '_reindex_jobs';
 
-const CREATE_REINDEX_JOBS_TABLE = `
+function createReindexJobsTableDDL(dialect: DDLDialect): string {
+  if (dialect === 'postgres') {
+    return `
+CREATE TABLE IF NOT EXISTS "${REINDEX_JOBS_TABLE}" (
+  "id" SERIAL PRIMARY KEY,
+  "resourceType" TEXT NOT NULL,
+  "searchParamCode" TEXT NOT NULL,
+  "expression" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "cursor" TEXT,
+  "processedCount" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+`;
+  }
+  return `
 CREATE TABLE IF NOT EXISTS "${REINDEX_JOBS_TABLE}" (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "resourceType" TEXT NOT NULL,
@@ -62,19 +79,28 @@ CREATE TABLE IF NOT EXISTS "${REINDEX_JOBS_TABLE}" (
   "updatedAt" TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
+}
+
+function nowExpression(dialect: DDLDialect): string {
+  return dialect === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')";
+}
 
 // =============================================================================
 // Section 3: ReindexScheduler
 // =============================================================================
 
 export class ReindexScheduler {
-  constructor(private readonly adapter: StorageAdapter) {}
+  private readonly dialect: DDLDialect;
+
+  constructor(private readonly adapter: StorageAdapter, dialect: DDLDialect = 'sqlite') {
+    this.dialect = dialect;
+  }
 
   /**
    * Ensure the reindex jobs table exists.
    */
   async ensureTable(): Promise<void> {
-    await this.adapter.execute(CREATE_REINDEX_JOBS_TABLE);
+    await this.adapter.execute(createReindexJobsTableDDL(this.dialect));
   }
 
   /**
@@ -154,7 +180,7 @@ export class ReindexScheduler {
       values.push(update.processedCount);
     }
 
-    sets.push(`"updatedAt" = datetime('now')`);
+    sets.push(`"updatedAt" = ${nowExpression(this.dialect)}`);
     values.push(id);
 
     await this.adapter.execute(

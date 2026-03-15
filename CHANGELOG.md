@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-03-15
+
+### Fixed
+
+#### PostgreSQL DDL Compatibility (Phase D)
+
+- **`migration-runner.ts`** — Tracking table `_migrations` now uses `TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP` on PostgreSQL instead of SQLite-only `datetime('now')`
+- **`package-registry-repo.ts`** — `_packages` and `_schema_version` tables use dialect-aware timestamp defaults; `INSERT OR REPLACE` replaced with `INSERT ... ON CONFLICT ... DO UPDATE` on PostgreSQL
+- **`reindex-scheduler.ts`** — `_reindex_jobs` table uses `SERIAL PRIMARY KEY` on PostgreSQL instead of `AUTOINCREMENT`; `datetime('now')` replaced with `CURRENT_TIMESTAMP`
+- **`valueset-repo.ts`** — `terminology_valuesets` table uses dialect-aware timestamp defaults; `INSERT OR REPLACE` replaced with `INSERT ... ON CONFLICT ... DO UPDATE` on PostgreSQL
+- **`lookup-table-writer.ts`** — 4 global lookup tables (`HumanName`, `Address`, `ContactPoint`, `Identifier`) use `SERIAL PRIMARY KEY` on PostgreSQL instead of `AUTOINCREMENT`
+
+### Changed
+
+- **`ig-persistence-manager.ts`** — Now passes `dialect` to `PackageRegistryRepo`, `MigrationRunnerV2`, and `ReindexScheduler` constructors
+- **`indexing-pipeline.ts`** — `IndexingPipelineOptions` accepts `dialect` parameter, passed to `LookupTableWriter`
+- **`fhir-system.ts`** — Passes `dialect` through to `IndexingPipeline` via `FhirPersistence` options
+- All new `dialect` parameters default to `'sqlite'` — fully backward-compatible
+
+### Test Coverage
+
+- **1014 total tests** (1006 passing, 8 skipped) across 56 test files — no regressions
+
 ## [0.3.0] - 2025-03-15
 
 ### Added

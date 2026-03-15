@@ -63,9 +63,9 @@ export class IGPersistenceManager {
 
   constructor(adapter: StorageAdapter, dialect: DDLDialect = 'sqlite') {
     this.dialect = dialect;
-    this.packageRepo = new PackageRegistryRepo(adapter);
-    this.migrationRunner = new MigrationRunnerV2(adapter);
-    this.reindexScheduler = new ReindexScheduler(adapter);
+    this.packageRepo = new PackageRegistryRepo(adapter, dialect);
+    this.migrationRunner = new MigrationRunnerV2(adapter, [], dialect);
+    this.reindexScheduler = new ReindexScheduler(adapter, dialect);
   }
 
   /**

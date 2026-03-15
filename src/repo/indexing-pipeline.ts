@@ -22,6 +22,7 @@
  */
 
 import type { StorageAdapter } from '../db/adapter.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 import type { SearchParameterImpl } from '../registry/search-parameter-registry.js';
 import type { FhirResource } from './types.js';
 import type { SearchColumnValues, LookupTableRow } from './row-indexer.js';
@@ -59,6 +60,8 @@ export interface IndexingPipelineOptions {
   enableReferences?: boolean;
   /** Optional RuntimeProvider for FHIRPath-driven extraction (B3). */
   runtimeProvider?: RuntimeProvider;
+  /** SQL dialect for lookup table DDL (default: 'sqlite'). */
+  dialect?: DDLDialect;
 }
 
 // =============================================================================
@@ -67,14 +70,14 @@ export interface IndexingPipelineOptions {
 
 export class IndexingPipeline {
   private readonly lookupWriter: LookupTableWriter;
-  private readonly options: Required<Omit<IndexingPipelineOptions, 'runtimeProvider'>>;
+  private readonly options: Required<Omit<IndexingPipelineOptions, 'runtimeProvider' | 'dialect'>>;
   private readonly runtimeProvider: RuntimeProvider | undefined;
 
   constructor(
     private readonly adapter: StorageAdapter,
     options?: IndexingPipelineOptions,
   ) {
-    this.lookupWriter = new LookupTableWriter(adapter);
+    this.lookupWriter = new LookupTableWriter(adapter, options?.dialect ?? 'sqlite');
     this.runtimeProvider = options?.runtimeProvider;
     this.options = {
       enableLookupTables: options?.enableLookupTables ?? true,

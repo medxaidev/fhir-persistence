@@ -16,6 +16,7 @@
  */
 
 import type { StorageAdapter } from '../db/adapter.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 import type { GeneratedMigration } from '../migration/migration-generator.js';
 
 /**
@@ -66,6 +67,19 @@ CREATE TABLE IF NOT EXISTS "${TRACKING_TABLE_V2}" (
 );
 `;
 
+const CREATE_TRACKING_TABLE_V2_POSTGRES = `
+CREATE TABLE IF NOT EXISTS "${TRACKING_TABLE_V2}" (
+  "version" INTEGER PRIMARY KEY,
+  "description" TEXT NOT NULL,
+  "type" TEXT NOT NULL DEFAULT 'file',
+  "applied_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+`;
+
+function createTrackingDDL(dialect: DDLDialect): string {
+  return dialect === 'postgres' ? CREATE_TRACKING_TABLE_V2_POSTGRES : CREATE_TRACKING_TABLE_V2_SQLITE;
+}
+
 /**
  * v2: Manages schema migrations using StorageAdapter (SQLite / PG).
  *
@@ -79,10 +93,12 @@ CREATE TABLE IF NOT EXISTS "${TRACKING_TABLE_V2}" (
 export class MigrationRunnerV2 {
   private readonly adapter: StorageAdapter;
   private readonly migrations: MigrationV2[];
+  private readonly dialect: DDLDialect;
 
-  constructor(adapter: StorageAdapter, migrations: MigrationV2[] = []) {
+  constructor(adapter: StorageAdapter, migrations: MigrationV2[] = [], dialect: DDLDialect = 'sqlite') {
     this.adapter = adapter;
     this.migrations = [...migrations].sort((a, b) => a.version - b.version);
+    this.dialect = dialect;
   }
 
   // ---------------------------------------------------------------------------
@@ -93,7 +109,7 @@ export class MigrationRunnerV2 {
    * Ensure the tracking table exists.
    */
   async ensureTrackingTable(): Promise<void> {
-    await this.adapter.execute(CREATE_TRACKING_TABLE_V2_SQLITE);
+    await this.adapter.execute(createTrackingDDL(this.dialect));
   }
 
   /**

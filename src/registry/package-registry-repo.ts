@@ -15,6 +15,7 @@
  */
 
 import type { StorageAdapter } from '../db/adapter.js';
+import type { DDLDialect } from '../schema/ddl-generator.js';
 
 // =============================================================================
 // Section 1: Types
@@ -53,42 +54,55 @@ export interface SchemaVersionRecord {
 // =============================================================================
 
 const PACKAGES_TABLE = '_packages';
+const SCHEMA_VERSION_TABLE = '_schema_version';
 
-const CREATE_PACKAGES_TABLE = `
+function createPackagesTableDDL(dialect: DDLDialect): string {
+  const ts = dialect === 'postgres'
+    ? 'TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP'
+    : "TEXT NOT NULL DEFAULT (datetime('now'))";
+  return `
 CREATE TABLE IF NOT EXISTS "${PACKAGES_TABLE}" (
   "name" TEXT NOT NULL,
   "version" TEXT NOT NULL,
   "checksum" TEXT NOT NULL,
   "schemaSnapshot" TEXT,
-  "installedAt" TEXT NOT NULL DEFAULT (datetime('now')),
+  "installedAt" ${ts},
   "status" TEXT NOT NULL DEFAULT 'active',
   PRIMARY KEY ("name", "version")
 );
 `;
+}
 
-const SCHEMA_VERSION_TABLE = '_schema_version';
-
-const CREATE_SCHEMA_VERSION_TABLE = `
+function createSchemaVersionTableDDL(dialect: DDLDialect): string {
+  const ts = dialect === 'postgres'
+    ? 'TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP'
+    : "TEXT NOT NULL DEFAULT (datetime('now'))";
+  return `
 CREATE TABLE IF NOT EXISTS "${SCHEMA_VERSION_TABLE}" (
   "version" INTEGER NOT NULL PRIMARY KEY,
   "packageList" TEXT NOT NULL,
   "description" TEXT NOT NULL DEFAULT '',
-  "appliedAt" TEXT NOT NULL DEFAULT (datetime('now'))
+  "appliedAt" ${ts}
 );
 `;
+}
 
 // =============================================================================
 // Section 3: PackageRegistryRepo
 // =============================================================================
 
 export class PackageRegistryRepo {
-  constructor(private readonly adapter: StorageAdapter) { }
+  private readonly dialect: DDLDialect;
+
+  constructor(private readonly adapter: StorageAdapter, dialect: DDLDialect = 'sqlite') {
+    this.dialect = dialect;
+  }
 
   /**
    * Ensure the packages tracking table exists.
    */
   async ensureTable(): Promise<void> {
-    await this.adapter.execute(CREATE_PACKAGES_TABLE);
+    await this.adapter.execute(createPackagesTableDDL(this.dialect));
   }
 
   /**
@@ -144,7 +158,7 @@ export class PackageRegistryRepo {
 
     // Insert the new version as active
     await this.adapter.execute(
-      `INSERT OR REPLACE INTO "${PACKAGES_TABLE}" ("name", "version", "checksum", "schemaSnapshot", "status") VALUES (?, ?, ?, ?, 'active')`,
+      this.upsertSQL(),
       [pkg.name, pkg.version, pkg.checksum, pkg.schemaSnapshot ?? null],
     );
 
@@ -167,9 +181,19 @@ export class PackageRegistryRepo {
     );
 
     await this.adapter.execute(
-      `INSERT OR REPLACE INTO "${PACKAGES_TABLE}" ("name", "version", "checksum", "schemaSnapshot", "status") VALUES (?, ?, ?, ?, 'active')`,
+      this.upsertSQL(),
       [pkg.name, pkg.version, pkg.checksum, pkg.schemaSnapshot ?? null],
     );
+  }
+
+  /**
+   * Generate dialect-aware UPSERT SQL.
+   */
+  private upsertSQL(): string {
+    if (this.dialect === 'postgres') {
+      return `INSERT INTO "${PACKAGES_TABLE}" ("name", "version", "checksum", "schemaSnapshot", "status") VALUES (?, ?, ?, ?, 'active') ON CONFLICT ("name", "version") DO UPDATE SET "checksum" = EXCLUDED."checksum", "schemaSnapshot" = EXCLUDED."schemaSnapshot", "status" = 'active'`;
+    }
+    return `INSERT OR REPLACE INTO "${PACKAGES_TABLE}" ("name", "version", "checksum", "schemaSnapshot", "status") VALUES (?, ?, ?, ?, 'active')`;
   }
 
   /**
@@ -206,7 +230,7 @@ export class PackageRegistryRepo {
    * Ensure the schema version table exists.
    */
   async ensureSchemaVersionTable(): Promise<void> {
-    await this.adapter.execute(CREATE_SCHEMA_VERSION_TABLE);
+    await this.adapter.execute(createSchemaVersionTableDDL(this.dialect));
   }
 
   /**

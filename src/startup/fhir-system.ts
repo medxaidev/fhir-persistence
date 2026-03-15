@@ -114,6 +114,7 @@ export class FhirSystem {
         enableLookupTables: this.options.enableLookupTables,
         enableReferences: this.options.enableReferences,
         runtimeProvider: this.options.runtimeProvider,
+        dialect: this.dialect,
       },
     });
 
