@@ -1,6 +1,6 @@
 # fhir-persistence — API Reference
 
-Version: 0.1.0
+Version: 0.3.0
 
 ---
 
@@ -18,22 +18,22 @@ const persistence = new FhirPersistence(options: FhirPersistenceOptions);
 
 **Options:**
 
-| Property | Type | Required | Description |
-|---|---|---|---|
-| `adapter` | `StorageAdapter` | Yes | Database adapter |
-| `searchParameterRegistry` | `SearchParameterRegistry` | Yes | Indexed search parameters |
-| `runtimeProvider` | `RuntimeProvider` | No | FHIRPath extraction (from fhir-runtime) |
+| Property                  | Type                      | Required | Description                             |
+| ------------------------- | ------------------------- | -------- | --------------------------------------- |
+| `adapter`                 | `StorageAdapter`          | Yes      | Database adapter (SQLite or PostgreSQL) |
+| `searchParameterRegistry` | `SearchParameterRegistry` | Yes      | Indexed search parameters               |
+| `runtimeProvider`         | `RuntimeProvider`         | No       | FHIRPath extraction (from fhir-runtime) |
 
 **Methods:**
 
-| Method | Returns | Description |
-|---|---|---|
-| `createResource(type, resource)` | `Promise<PersistedResource>` | Create with auto-indexing |
-| `readResource(type, id)` | `Promise<PersistedResource>` | Read by ID |
-| `updateResource(type, resource)` | `Promise<PersistedResource>` | Update with re-indexing |
-| `deleteResource(type, id)` | `Promise<void>` | Soft delete |
-| `searchResources(request)` | `Promise<SearchResult>` | Search with pagination |
-| `searchStream(request)` | `AsyncIterable<PersistedResource>` | Streaming search results |
+| Method                           | Returns                            | Description               |
+| -------------------------------- | ---------------------------------- | ------------------------- |
+| `createResource(type, resource)` | `Promise<PersistedResource>`       | Create with auto-indexing |
+| `readResource(type, id)`         | `Promise<PersistedResource>`       | Read by ID                |
+| `updateResource(type, resource)` | `Promise<PersistedResource>`       | Update with re-indexing   |
+| `deleteResource(type, id)`       | `Promise<void>`                    | Soft delete               |
+| `searchResources(request)`       | `Promise<SearchResult>`            | Search with pagination    |
+| `searchStream(request)`          | `AsyncIterable<PersistedResource>` | Streaming search results  |
 
 ---
 
@@ -49,13 +49,14 @@ const store = new FhirStore(adapter: StorageAdapter);
 
 **Methods:**
 
-| Method | Returns | Description |
-|---|---|---|
-| `create(type, resource)` | `Promise<PersistedResource>` | Insert resource |
-| `read(type, id)` | `Promise<PersistedResource>` | Read by ID |
-| `update(type, resource)` | `Promise<PersistedResource>` | Update resource |
-| `delete(type, id)` | `Promise<void>` | Soft delete |
-| `history(type, id, options?)` | `Promise<HistoryEntry[]>` | Instance history |
+| Method                                     | Returns                      | Description                                             |
+| ------------------------------------------ | ---------------------------- | ------------------------------------------------------- |
+| `createResource(type, resource, options?)` | `Promise<PersistedResource>` | Insert resource                                         |
+| `readResource(type, id)`                   | `Promise<PersistedResource>` | Read by ID                                              |
+| `updateResource(type, resource, options?)` | `Promise<PersistedResource>` | Update resource (supports `ifMatch` optimistic locking) |
+| `deleteResource(type, id)`                 | `Promise<void>`              | Soft delete (content preserved)                         |
+| `readHistory(type, id, options?)`          | `Promise<HistoryEntry[]>`    | Instance history (newest first)                         |
+| `readVersion(type, id, versionId)`         | `Promise<PersistedResource>` | Read specific version (vread)                           |
 
 ---
 
@@ -64,46 +65,86 @@ const store = new FhirStore(adapter: StorageAdapter);
 ### `StorageAdapter` (interface)
 
 ```typescript
-import type { StorageAdapter } from 'fhir-persistence';
+import type { StorageAdapter } from "fhir-persistence";
 ```
 
-| Method | Signature |
-|---|---|
-| `execute` | `(sql: string, params?: unknown[]) => Promise<{ changes: number }>` |
-| `query` | `<T>(sql: string, params?: unknown[]) => Promise<T[]>` |
-| `queryOne` | `<T>(sql: string, params?: unknown[]) => Promise<T \| undefined>` |
-| `queryStream` | `<T>(sql: string, params?: unknown[]) => AsyncIterable<T>` |
-| `prepare` | `<T>(sql: string) => PreparedStatement<T>` |
-| `transaction` | `<R>(fn: (tx: TransactionContext) => R) => Promise<R>` |
-| `close` | `() => Promise<void>` |
+| Method        | Signature                                                           |
+| ------------- | ------------------------------------------------------------------- |
+| `execute`     | `(sql: string, params?: unknown[]) => Promise<{ changes: number }>` |
+| `query`       | `<T>(sql: string, params?: unknown[]) => Promise<T[]>`              |
+| `queryOne`    | `<T>(sql: string, params?: unknown[]) => Promise<T \| undefined>`   |
+| `queryStream` | `<T>(sql: string, params?: unknown[]) => AsyncIterable<T>`          |
+| `prepare`     | `<T>(sql: string) => PreparedStatement<T>`                          |
+| `transaction` | `<R>(fn: (tx: TransactionContext) => Promise<R>) => Promise<R>`     |
+| `close`       | `() => Promise<void>`                                               |
 
 ### `BetterSqlite3Adapter`
 
 Native SQLite via better-sqlite3. **Recommended for production Node.js.**
 
 ```typescript
-import { BetterSqlite3Adapter } from 'fhir-persistence';
+import { BetterSqlite3Adapter } from "fhir-persistence";
 
-const adapter = new BetterSqlite3Adapter({ path: './fhir.db' });
+const adapter = new BetterSqlite3Adapter({ path: "./fhir.db" });
 // or in-memory:
-const adapter = new BetterSqlite3Adapter({ path: ':memory:' });
+const adapter = new BetterSqlite3Adapter({ path: ":memory:" });
 ```
 
 **Options (`BetterSqlite3Options`):**
 
-| Property | Type | Default | Description |
-|---|---|---|---|
-| `path` | `string` | `':memory:'` | Database file path |
+| Property | Type     | Default      | Description        |
+| -------- | -------- | ------------ | ------------------ |
+| `path`   | `string` | `':memory:'` | Database file path |
 
-### `SQLiteAdapter`
+### `PostgresAdapter`
 
-WASM-based SQLite via sql.js. Cross-platform (browser, Electron, Node.js).
+PostgreSQL via `pg` connection pool. **Recommended for production servers.**
 
 ```typescript
-import { SQLiteAdapter } from 'fhir-persistence';
+import { PostgresAdapter } from "fhir-persistence";
+import { Pool } from "pg";
 
-const adapter = new SQLiteAdapter(':memory:');
+const pool = new Pool({
+  host: "localhost",
+  port: 5432,
+  database: "fhir_db",
+  user: "postgres",
+  password: "secret",
+});
+const adapter = new PostgresAdapter(pool);
 ```
+
+**Features:**
+
+- Automatic `?` → `$1, $2, ...` placeholder rewriting
+- Transaction support via pool client + `BEGIN`/`COMMIT`/`ROLLBACK`
+- Serialization failure retry (code 40001) with exponential backoff
+- `queryStream` via row-by-row iteration
+- `close()` guard preventing use-after-close
+
+---
+
+## SQL Dialect
+
+### `SqlDialect` (interface)
+
+Abstracts SQL syntax differences between SQLite and PostgreSQL.
+
+```typescript
+import type { SqlDialect } from "fhir-persistence";
+import { SQLiteDialect, PostgresDialect } from "fhir-persistence";
+
+const sqliteDialect = new SQLiteDialect();
+const pgDialect = new PostgresDialect();
+```
+
+| Method                          | SQLite                    | PostgreSQL                     |
+| ------------------------------- | ------------------------- | ------------------------------ |
+| `placeholder(n)`                | `?`                       | `$n`                           |
+| `textArrayContains(col, param)` | `json_each(col)` subquery | `col @> ARRAY[param]`          |
+| `timestampType`                 | `TEXT`                    | `TIMESTAMPTZ`                  |
+| `identityColumn`                | `AUTOINCREMENT`           | `GENERATED ALWAYS AS IDENTITY` |
+| `upsertSuffix(...)`             | `INSERT OR REPLACE`       | `ON CONFLICT ... DO UPDATE`    |
 
 ---
 
@@ -112,25 +153,25 @@ const adapter = new SQLiteAdapter(':memory:');
 ### `SearchParameterRegistry`
 
 ```typescript
-import { SearchParameterRegistry } from 'fhir-persistence';
+import { SearchParameterRegistry } from "fhir-persistence";
 
 const registry = new SearchParameterRegistry();
-registry.indexBundle(searchParameterBundle);    // bulk index
-registry.index(searchParam);                    // single index
+registry.indexBundle(searchParameterBundle); // bulk index
+registry.index(searchParam); // single index
 
-const params = registry.getForResource('Patient');
-const param = registry.get('Patient', 'birthdate');
+const params = registry.getForResource("Patient");
+const param = registry.get("Patient", "birthdate");
 ```
 
 ### `StructureDefinitionRegistry`
 
 ```typescript
-import { StructureDefinitionRegistry } from 'fhir-persistence';
+import { StructureDefinitionRegistry } from "fhir-persistence";
 
 const sdRegistry = new StructureDefinitionRegistry();
-sdRegistry.register(structureDefinition);
+sdRegistry.index(structureDefinition);
 
-const sd = sdRegistry.get('Patient');
+const sd = sdRegistry.get("Patient");
 const all = sdRegistry.getAll();
 ```
 
@@ -141,10 +182,13 @@ const all = sdRegistry.getAll();
 ### Schema Builder
 
 ```typescript
-import { buildResourceTableSet, buildAllResourceTableSets } from 'fhir-persistence';
+import {
+  buildResourceTableSet,
+  buildAllResourceTableSets,
+} from "fhir-persistence";
 
 // Single resource type
-const tableSet = buildResourceTableSet('Patient', sdRegistry, spRegistry);
+const tableSet = buildResourceTableSet("Patient", sdRegistry, spRegistry);
 
 // All registered resource types
 const allSets = buildAllResourceTableSets(sdRegistry, spRegistry);
@@ -152,16 +196,27 @@ const allSets = buildAllResourceTableSets(sdRegistry, spRegistry);
 
 ### DDL Generator
 
+Generates dialect-aware DDL statements. The `dialect` parameter accepts `'sqlite'` or `'postgres'`.
+
 ```typescript
 import {
   generateCreateMainTable,
   generateCreateHistoryTable,
   generateCreateReferencesTable,
-} from 'fhir-persistence';
+  generateResourceDDL,
+} from "fhir-persistence";
 
-const mainDDL = generateCreateMainTable(tableSet.main, 'sqlite');
-const historyDDL = generateCreateHistoryTable(tableSet.history, 'sqlite');
-const refDDL = generateCreateReferencesTable(tableSet.references, 'sqlite');
+// SQLite DDL
+const mainDDL = generateCreateMainTable(tableSet.main, "sqlite");
+
+// PostgreSQL DDL
+const pgDDL = generateCreateMainTable(tableSet.main, "postgres");
+
+// Full DDL for a resource type (CREATE TABLE + CREATE INDEX)
+const allStmts = generateResourceDDL(tableSet, "postgres");
+for (const stmt of allStmts) {
+  await adapter.execute(stmt);
+}
 ```
 
 ---
@@ -171,45 +226,74 @@ const refDDL = generateCreateReferencesTable(tableSet.references, 'sqlite');
 ### Parse & Build
 
 ```typescript
-import { parseSearchRequest, buildSearchSQLv2, buildCountSQLv2 } from 'fhir-persistence';
+import {
+  parseSearchRequest,
+  buildSearchSQLv2,
+  buildCountSQLv2,
+} from "fhir-persistence";
 
-const request = parseSearchRequest('Patient', {
-  birthdate: 'ge1990-01-01',
-  active: 'true',
-  _sort: '-birthdate',
-  _count: '50',
-}, registry);
+const request = parseSearchRequest(
+  "Patient",
+  {
+    birthdate: "ge1990-01-01",
+    active: "true",
+    _sort: "-birthdate",
+    _count: "50",
+  },
+  registry,
+);
 
+// Optional dialect parameter for PostgreSQL-compatible SQL
 const { sql, params } = buildSearchSQLv2(request, registry);
-const { sql: countSql, params: countParams } = buildCountSQLv2(request, registry);
+const { sql: countSql, params: countParams } = buildCountSQLv2(
+  request,
+  registry,
+);
 ```
 
 ### Chain Search
 
 ```typescript
-const request = parseSearchRequest('Observation', {
-  'subject:Patient.birthdate': 'ge1990-01-01',
-}, registry);
+const request = parseSearchRequest(
+  "Observation",
+  {
+    "subject:Patient.birthdate": "ge1990-01-01",
+  },
+  registry,
+);
 ```
 
 ### Search Planner
 
 ```typescript
-import { planSearch, buildTwoPhaseSearchSQLv2 } from 'fhir-persistence';
+import { planSearch, buildTwoPhaseSearchSQLv2 } from "fhir-persistence";
 
 const plan = planSearch(request, registry, { estimatedRowCount: 100_000 });
 if (plan.useTwoPhase) {
-  const { phase1, phase2Template } = buildTwoPhaseSearchSQLv2(plan.request, registry);
+  const { phase1, phase2Template } = buildTwoPhaseSearchSQLv2(
+    plan.request,
+    registry,
+  );
 }
 ```
 
 ### Where Builder
 
-```typescript
-import { buildWhereFragmentV2, buildWhereClauseV2 } from 'fhir-persistence';
+Dialect-aware WHERE clause generation.
 
+```typescript
+import { buildWhereFragmentV2, buildWhereClauseV2 } from "fhir-persistence";
+import { PostgresDialect } from "fhir-persistence";
+
+// SQLite (default)
 const fragment = buildWhereFragmentV2(parsedParam, registry);
-const clause = buildWhereClauseV2(request, registry);
+
+// PostgreSQL
+const pgFragment = buildWhereFragmentV2(
+  parsedParam,
+  registry,
+  new PostgresDialect(),
+);
 ```
 
 ---
@@ -219,13 +303,14 @@ const clause = buildWhereClauseV2(request, registry);
 ### `IGPersistenceManager`
 
 ```typescript
-import { IGPersistenceManager } from 'fhir-persistence';
+import { IGPersistenceManager } from "fhir-persistence";
 
-const igManager = new IGPersistenceManager(adapter, 'sqlite');
+// Dialect: 'sqlite' or 'postgres'
+const igManager = new IGPersistenceManager(adapter, "postgres");
 
 const result = await igManager.initialize({
-  name: 'hl7.fhir.r4.core',
-  version: '4.0.1',
+  name: "hl7.fhir.r4.core",
+  version: "4.0.1",
   checksum: computedChecksum,
   tableSets: generatedTableSets,
 });
@@ -236,21 +321,24 @@ const result = await igManager.initialize({
 ### Schema Diff
 
 ```typescript
-import { compareSchemas, generateMigration } from 'fhir-persistence';
+import { compareSchemas, generateMigration } from "fhir-persistence";
 
 const deltas = compareSchemas(oldTableSets, newTableSets);
-const migration = generateMigration(deltas, 'sqlite');
+
+// Generate dialect-specific migration DDL
+const sqliteMigration = generateMigration(deltas, "sqlite");
+const pgMigration = generateMigration(deltas, "postgres");
 // migration.up: string[] — DDL statements to apply
 ```
 
 ### Package Registry
 
 ```typescript
-import { PackageRegistryRepo } from 'fhir-persistence';
+import { PackageRegistryRepo } from "fhir-persistence";
 
 const repo = new PackageRegistryRepo(adapter);
-const status = await repo.checkStatus('hl7.fhir.r4.core', checksum);
-const pkg = await repo.getPackage('hl7.fhir.r4.core');
+const status = await repo.checkStatus("hl7.fhir.r4.core", checksum);
+const pkg = await repo.getPackage("hl7.fhir.r4.core");
 ```
 
 ---
@@ -260,15 +348,15 @@ const pkg = await repo.getPackage('hl7.fhir.r4.core');
 ### `IndexingPipeline`
 
 ```typescript
-import { IndexingPipeline } from 'fhir-persistence';
+import { IndexingPipeline } from "fhir-persistence";
 
 const pipeline = new IndexingPipeline({
   adapter,
   searchParameterRegistry: spRegistry,
-  runtimeProvider,  // optional — enables FHIRPath extraction
+  runtimeProvider, // optional — enables FHIRPath extraction
 });
 
-const result = await pipeline.index('Patient', resource, tableSet);
+const result = await pipeline.index("Patient", resource, tableSet);
 ```
 
 ---
@@ -280,10 +368,10 @@ const result = await pipeline.index('Patient', resource, tableSet);
 Wraps `fhir-definition`'s `DefinitionRegistry` into `fhir-persistence`'s `DefinitionProvider`.
 
 ```typescript
-import { FhirDefinitionBridge } from 'fhir-persistence';
-import { loadDefinitionPackages } from 'fhir-definition';
+import { FhirDefinitionBridge } from "fhir-persistence";
+import { loadDefinitionPackages } from "fhir-definition";
 
-const { registry } = loadDefinitionPackages('./fhir-packages');
+const { registry } = loadDefinitionPackages("./fhir-packages");
 const bridge = new FhirDefinitionBridge(registry);
 // bridge satisfies DefinitionProvider
 ```
@@ -293,8 +381,8 @@ const bridge = new FhirDefinitionBridge(registry);
 Wraps `fhir-runtime`'s `FhirRuntimeInstance` into `fhir-persistence`'s `RuntimeProvider`.
 
 ```typescript
-import { FhirRuntimeProvider } from 'fhir-persistence';
-import { createRuntime } from 'fhir-runtime';
+import { FhirRuntimeProvider } from "fhir-persistence";
+import { createRuntime } from "fhir-runtime";
 
 const runtime = await createRuntime({ definitions: registry });
 const provider = new FhirRuntimeProvider({ runtime });
@@ -310,14 +398,18 @@ const provider = new FhirRuntimeProvider({ runtime });
 End-to-end bootstrap: definitions → registries → schema → persistence.
 
 ```typescript
-import { FhirSystem, BetterSqlite3Adapter, FhirDefinitionBridge } from 'fhir-persistence';
+import {
+  FhirSystem,
+  BetterSqlite3Adapter,
+  FhirDefinitionBridge,
+} from "fhir-persistence";
 
-const adapter = new BetterSqlite3Adapter({ path: './fhir.db' });
+const adapter = new BetterSqlite3Adapter({ path: "./fhir.db" });
 const system = new FhirSystem(adapter, {
-  dialect: 'sqlite',
-  runtimeProvider,     // optional
-  packageName: 'my-app',
-  packageVersion: '1.0.0',
+  dialect: "sqlite", // or 'postgres'
+  runtimeProvider, // optional
+  packageName: "my-app",
+  packageVersion: "1.0.0",
 });
 
 const result = await system.initialize(definitionBridge);
@@ -332,7 +424,7 @@ const result = await system.initialize(definitionBridge);
 ## Terminology
 
 ```typescript
-import { TerminologyCodeRepo, ValueSetRepo } from 'fhir-persistence';
+import { TerminologyCodeRepo, ValueSetRepo } from "fhir-persistence";
 
 const termRepo = new TerminologyCodeRepo(adapter);
 const vsRepo = new ValueSetRepo(adapter);
@@ -343,7 +435,7 @@ const vsRepo = new ValueSetRepo(adapter);
 ## Production Utilities
 
 ```typescript
-import { ResourceCacheV2, SearchLogger, reindexAllV2 } from 'fhir-persistence';
+import { ResourceCacheV2, SearchLogger, reindexAllV2 } from "fhir-persistence";
 
 // In-memory cache
 const cache = new ResourceCacheV2({ maxSize: 1000, ttlMs: 60_000 });
@@ -361,20 +453,22 @@ await reindexAllV2(adapter, spRegistry, pipeline);
 
 Key exported types:
 
-| Type | Module | Description |
-|---|---|---|
-| `StorageAdapter` | db | Database abstraction |
-| `TransactionContext` | db | Transaction callback context |
-| `BetterSqlite3Options` | db | better-sqlite3 config |
-| `FhirPersistenceOptions` | store | Persistence facade config |
-| `FhirResource` | repo | Base FHIR resource shape |
-| `PersistedResource` | repo | Resource with id/versionId/lastUpdated |
-| `SearchRequest` | search | Parsed search parameters |
-| `SearchResult` | repo | Search result with pagination |
-| `SearchBundle` | search | FHIR Bundle search response |
-| `ResourceTableSet` | schema | Main + History + References schema |
-| `SearchParameterImpl` | registry | Indexed search parameter |
-| `SchemaDelta` | migration | Schema diff entry |
-| `GeneratedMigration` | migration | Migration DDL statements |
-| `IGInitResult` | migration | IG initialization result |
-| `IndexResult` | repo | Indexing pipeline result |
+| Type                     | Module     | Description                              |
+| ------------------------ | ---------- | ---------------------------------------- |
+| `StorageAdapter`         | db         | Database abstraction                     |
+| `TransactionContext`     | db         | Async transaction callback context       |
+| `SqlDialect`             | db         | SQL syntax abstraction interface         |
+| `BetterSqlite3Options`   | db         | better-sqlite3 config                    |
+| `FhirPersistenceOptions` | store      | Persistence facade config                |
+| `FhirResource`           | repo       | Base FHIR resource shape                 |
+| `PersistedResource`      | repo       | Resource with id/versionId/lastUpdated   |
+| `SearchRequest`          | search     | Parsed search parameters                 |
+| `SearchResult`           | repo       | Search result with pagination            |
+| `SearchBundle`           | search     | FHIR Bundle search response              |
+| `ResourceTableSet`       | schema     | Main + History + References schema       |
+| `SearchParameterImpl`    | registry   | Indexed search parameter                 |
+| `SchemaDelta`            | migration  | Schema diff entry                        |
+| `GeneratedMigration`     | migration  | Migration DDL statements                 |
+| `MigrationV2`            | migrations | Migration definition (version, up, down) |
+| `IGInitResult`           | migration  | IG initialization result                 |
+| `IndexResult`            | repo       | Indexing pipeline result                 |

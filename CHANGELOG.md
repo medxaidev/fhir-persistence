@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-03-15
+
+### Added
+
+#### Dual-Backend Validation
+
+- Comprehensive dual-backend test suite (`dual-backend-validation.test.ts`) — 41 tests covering SQLite and PostgreSQL
+  - **Schema DDL correctness** — generate and execute DDL on both backends, verify tables/columns/indexes
+  - **IG lifecycle validation** — `compareSchemas` → `generateMigration` → apply migration on both backends
+  - **CRUD correctness** — `FhirStore` create/read/update/delete/history/vread on both SQLite and PostgreSQL
+  - Transaction atomicity verification on PostgreSQL
+  - Optimistic locking (`ifMatch`) verification on both backends
+  - History auto-increment `versionSeq` verification on PostgreSQL
+
+#### PostgreSQL Integration Tests
+
+- 23 PostgreSQL integration tests (`postgres-adapter.integration.test.ts`) covering CRUD, transactions, DDL generation, migrations, search SQL generation, concurrency, streaming, and NULL handling
+
+### Changed
+
+- `buildTableSet` helper now accepts parameterized `resourceType` for test isolation (unique constraint/index names per test run)
+- Schema DDL comparison tests verify CREATE TABLE count parity rather than exact statement count (SQLite generates extra AUTOINCREMENT index)
+
+### Fixed
+
+- PostgreSQL test isolation — unique resource type names per run prevent constraint/index name collisions across test runs
+
+### Test Coverage
+
+- **1014 total tests** (1006 passing, 8 skipped) across 56 test files
+- Full CRUD verified on both SQLite (in-memory) and PostgreSQL (localhost:5433)
+
 ## [0.2.0] - 2025-03-15
 
 ### Added

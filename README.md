@@ -5,10 +5,13 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 [![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
+> **v0.3.0** — Dual-backend validated: 1014 tests across SQLite and PostgreSQL
+
 ## Features
 
 - **StorageAdapter abstraction** — unified async interface for SQLite and PostgreSQL
-- **Two SQLite adapters** — `BetterSqlite3Adapter` (native, production) + `SQLiteAdapter` (sql.js WASM, cross-platform)
+- **Dual-backend support** — `BetterSqlite3Adapter` (native SQLite) + `PostgresAdapter` (pg)
+- **SqlDialect abstraction** — dialect-aware SQL generation for array operators, DDL, upsert
 - **3-table-per-resource pattern** — Main + History + References tables per FHIR resource type
 - **Automatic search indexing** — column, token-column, and lookup-table strategies
 - **FHIRPath-driven extraction** — optional `RuntimeProvider` bridge for `fhir-runtime` powered indexing
@@ -34,21 +37,24 @@ npm install fhir-persistence
 
 ```bash
 npm install fhir-definition fhir-runtime
+
+# For PostgreSQL support (optional):
+npm install pg
 ```
 
 ## Quick Start
 
-### Standalone (low-level)
+### SQLite (standalone)
 
 ```typescript
 import {
-  SQLiteAdapter,
+  BetterSqlite3Adapter,
   FhirPersistence,
   SearchParameterRegistry,
 } from "fhir-persistence";
 
 // 1. Create storage adapter
-const adapter = new SQLiteAdapter(":memory:");
+const adapter = new BetterSqlite3Adapter({ path: "./fhir.db" });
 
 // 2. Create search parameter registry
 const spRegistry = new SearchParameterRegistry();
@@ -78,6 +84,29 @@ const result = await persistence.searchResources({
 });
 ```
 
+### PostgreSQL
+
+```typescript
+import { PostgresAdapter, FhirStore } from "fhir-persistence";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  host: "localhost",
+  port: 5432,
+  database: "fhir_db",
+  user: "postgres",
+  password: "secret",
+});
+const adapter = new PostgresAdapter(pool);
+const store = new FhirStore(adapter);
+
+// Same CRUD API as SQLite — no code changes needed
+const patient = await store.createResource("Patient", {
+  resourceType: "Patient",
+  name: [{ family: "Smith" }],
+});
+```
+
 ### With FhirSystem (recommended for fhir-engine)
 
 ```typescript
@@ -96,7 +125,7 @@ const adapter = new BetterSqlite3Adapter({ path: './fhir.db' });
 const definitionBridge = new FhirDefinitionBridge(registry);
 
 // 4. Bootstrap via FhirSystem
-const system = new FhirSystem(adapter, { dialect: 'sqlite' });
+const system = new FhirSystem(adapter, { dialect: 'sqlite' });  // or 'postgres'
 const { persistence, sdRegistry, spRegistry, igResult } =
   await system.initialize(definitionBridge);
 
@@ -107,9 +136,13 @@ const patient = await persistence.createResource('Patient', { resourceType: 'Pat
 ## Architecture
 
 ```
-StorageAdapter (SQLite / better-sqlite3 / PostgreSQL)
+StorageAdapter (BetterSqlite3Adapter / PostgresAdapter)
+  │
+  ├── SqlDialect (SQLiteDialect / PostgresDialect)
+  │     └── Dialect-aware: DDL, array operators, upsert, timestamps
+  │
   └── FhirPersistence (end-to-end facade)
-        ├── FhirStore (basic CRUD + soft delete + versioning)
+        ├── FhirStore (basic CRUD + soft delete + optimistic locking + versioning)
         ├── IndexingPipeline
         │     ├── RuntimeProvider (FHIRPath extraction, optional)
         │     ├── buildSearchColumns (fallback row indexer)
@@ -119,7 +152,7 @@ StorageAdapter (SQLite / better-sqlite3 / PostgreSQL)
         ├── BundleProcessorV2 (transaction / batch)
         ├── SearchParameterRegistry
         └── Search Engine
-              ├── WhereBuilder v2 (chain search, ? placeholders)
+              ├── WhereBuilder v2 (chain search, dialect-aware)
               ├── SearchPlanner (filter reorder, two-phase recommendation)
               ├── SearchSQLBuilder v2 (single-phase + two-phase)
               ├── SearchExecutor (_include / _revinclude / _include:iterate)
@@ -131,8 +164,7 @@ StorageAdapter (SQLite / better-sqlite3 / PostgreSQL)
 | Adapter                | Backend                 | Use Case                          |
 | ---------------------- | ----------------------- | --------------------------------- |
 | `BetterSqlite3Adapter` | better-sqlite3 (native) | Production Node.js, CLI, Electron |
-| `SQLiteAdapter`        | sql.js (WASM)           | Browser, cross-platform, testing  |
-| `PostgresAdapter`      | pg                      | Production server                 |
+| `PostgresAdapter`      | pg (connection pool)    | Production server                 |
 
 ## Search
 
@@ -155,7 +187,7 @@ const request = parseSearchRequest(
   registry,
 );
 
-// Single-phase SQL
+// Single-phase SQL (dialect-aware)
 const sql = buildSearchSQLv2(request, registry);
 
 // Two-phase SQL for large tables
@@ -184,7 +216,8 @@ The IG persistence manager automatically handles schema evolution:
 ```typescript
 import { IGPersistenceManager } from "fhir-persistence";
 
-const igManager = new IGPersistenceManager(adapter, "sqlite");
+// Dialect: 'sqlite' or 'postgres'
+const igManager = new IGPersistenceManager(adapter, "postgres");
 const result = await igManager.initialize({
   name: "hl7.fhir.r4.core",
   version: "4.0.1",
@@ -202,7 +235,7 @@ const result = await igManager.initialize({
 import { createFhirEngine } from "fhir-engine";
 
 const engine = await createFhirEngine({
-  database: { type: "sqlite", url: "./fhir.db" },
+  database: { type: "sqlite", url: "./fhir.db" }, // or { type: 'postgres', ... }
   packages: { path: "./fhir-packages" },
 });
 
@@ -218,7 +251,7 @@ const engine = await createFhirEngine({
 | `fhir-definition` | StructureDefinition, SearchParameter, ValueSet, CodeSystem definitions |
 | `fhir-runtime`    | FHIRPath evaluation, validation, search value extraction               |
 | `better-sqlite3`  | Native SQLite bindings (production)                                    |
-| `sql.js`          | WebAssembly SQLite (cross-platform)                                    |
+| `pg`              | PostgreSQL client (optional peer dependency)                           |
 
 ## License
 

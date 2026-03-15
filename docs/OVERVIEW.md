@@ -1,6 +1,6 @@
 # fhir-persistence — Overview
 
-Version: 0.1.0
+Version: 0.3.0
 
 ---
 
@@ -8,12 +8,13 @@ Version: 0.1.0
 
 `fhir-persistence` is an **embedded FHIR R4 persistence layer** that provides:
 
-- CRUD operations on FHIR resources
-- Automatic search parameter indexing
-- FHIR search with chain search, _include, _revinclude
+- CRUD operations on FHIR resources with optimistic locking and soft delete
+- Automatic search parameter indexing (column, token-column, lookup-table strategies)
+- FHIR search with chain search, `_include`, `_revinclude`, `_include:iterate`
 - Schema generation from StructureDefinitions + SearchParameters
-- Automatic schema migration when IGs change
-- SQLite (native + WASM) and PostgreSQL support
+- Automatic schema migration when IGs change (diff → DDL → apply)
+- **Dual-backend support**: SQLite (native via better-sqlite3) and PostgreSQL (via pg)
+- Dialect-aware SQL generation (`SqlDialect` abstraction)
 
 It is designed to be the **storage engine** behind `fhir-engine`, which bootstraps the full FHIR stack.
 
@@ -46,7 +47,7 @@ fhir-definition
 
 ### 1. StorageAdapter Abstraction
 
-All database access goes through the `StorageAdapter` interface. No code in fhir-persistence directly imports `better-sqlite3`, `sql.js`, or `pg`. This allows:
+All database access goes through the `StorageAdapter` interface. No code in fhir-persistence directly imports `better-sqlite3` or `pg`. This allows:
 
 - Swapping databases without changing application code
 - Running tests with in-memory SQLite
@@ -56,13 +57,14 @@ All database access goes through the `StorageAdapter` interface. No code in fhir
 
 Each FHIR resource type gets three tables:
 
-| Table | Purpose |
-|---|---|
-| `"Patient"` | Main table with current resource + search columns |
-| `"Patient_History"` | All historical versions |
-| `"Patient_References"` | Extracted resource references |
+| Table                  | Purpose                                               |
+| ---------------------- | ----------------------------------------------------- |
+| `"Patient"`            | Main table with current resource + search columns     |
+| `"Patient_History"`    | All historical versions (auto-increment `versionSeq`) |
+| `"Patient_References"` | Extracted resource references                         |
 
 Plus shared lookup tables for complex types:
+
 - `"HumanName_Lookup"` — name search
 - `"Address_Lookup"` — address search
 - `"ContactPoint_Lookup"` — telecom search
@@ -81,9 +83,21 @@ When an IG is upgraded, `IGPersistenceManager` computes a diff and applies only 
 
 ### 4. Parameterized SQL (`?` Placeholders)
 
-All generated SQL uses `?` positional placeholders (not PostgreSQL `$1`). This is compatible with both SQLite and PostgreSQL adapters.
+All generated SQL uses `?` positional placeholders. The `PostgresAdapter` automatically rewrites `?` → `$1, $2, ...` for PostgreSQL compatibility. Application code never needs to handle placeholder syntax differences.
 
-### 5. Provider Bridge Pattern
+### 5. SqlDialect Abstraction
+
+SQL syntax differences are encapsulated in the `SqlDialect` interface:
+
+| Concern           | SQLite (`SQLiteDialect`) | PostgreSQL (`PostgresDialect`) |
+| ----------------- | ------------------------ | ------------------------------ |
+| Array containment | `json_each()` subquery   | `@>` / `&&` ARRAY operators    |
+| Identity column   | `AUTOINCREMENT`          | `GENERATED ALWAYS AS IDENTITY` |
+| Timestamp type    | `TEXT`                   | `TIMESTAMPTZ`                  |
+| Boolean type      | `INTEGER`                | `BOOLEAN`                      |
+| Upsert            | `INSERT OR REPLACE`      | `ON CONFLICT ... DO UPDATE`    |
+
+### 6. Provider Bridge Pattern
 
 `fhir-persistence` defines its own minimal interfaces (`DefinitionProvider`, `RuntimeProvider`) and provides bridge classes that wrap the real `fhir-definition` and `fhir-runtime` packages:
 
@@ -103,17 +117,19 @@ This keeps `fhir-persistence` loosely coupled — it can run without `fhir-runti
 
 ```
 src/
-  index.ts                     ← public API barrel (252 exports)
+  index.ts                     ← public API barrel
 
   db/
     adapter.ts                 ← StorageAdapter interface
-    sqlite-adapter.ts          ← sql.js WASM adapter
-    better-sqlite3-adapter.ts  ← native SQLite adapter
-    sqlite-dialect.ts          ← SQLite SQL dialect helpers
+    dialect.ts                 ← SqlDialect interface
+    better-sqlite3-adapter.ts  ← native SQLite adapter (production)
+    sqlite-dialect.ts          ← SQLiteDialect implementation
+    postgres-adapter.ts        ← PostgreSQL adapter (production)
+    postgres-dialect.ts        ← PostgresDialect implementation
 
   store/
     fhir-persistence.ts        ← FhirPersistence (main facade)
-    fhir-store.ts              ← FhirStore (basic CRUD)
+    fhir-store.ts              ← FhirStore (basic CRUD + optimistic locking)
     conditional-service.ts     ← Conditional CRUD operations
 
   repo/
@@ -125,20 +141,23 @@ src/
 
   search/
     search-parser.ts           ← Parse FHIR search URL params
-    where-builder.ts           ← WHERE clause + chain search
-    search-sql-builder.ts      ← Full SELECT query generation
+    where-builder.ts           ← WHERE clause + chain search (dialect-aware)
+    search-sql-builder.ts      ← Full SELECT query generation (dialect-aware)
     search-planner.ts          ← Optimization (filter reorder, two-phase)
-    search-executor.ts         ← _include/_revinclude resolution
+    search-executor.ts         ← _include/_revinclude resolution (dialect-aware)
 
   schema/
     table-schema-builder.ts    ← SD + SP → ResourceTableSet
-    ddl-generator.ts           ← ResourceTableSet → CREATE TABLE DDL
+    ddl-generator.ts           ← ResourceTableSet → CREATE TABLE DDL (sqlite/postgres)
 
   migration/
-    schema-diff.ts             ← Compare old/new schemas
-    migration-generator.ts     ← Diff → DDL statements
+    schema-diff.ts             ← Compare old/new schemas → SchemaDelta[]
+    migration-generator.ts     ← Diff → dialect-aware DDL statements
     ig-persistence-manager.ts  ← Three-way branch: new/upgrade/consistent
     reindex-scheduler.ts       ← Schedule reindex for SP changes
+
+  migrations/
+    migration-runner.ts        ← MigrationRunnerV2 (execute migrations)
 
   registry/
     search-parameter-registry.ts    ← SP indexing and lookup
@@ -182,8 +201,9 @@ src/
 createResource('Patient', resource)
     │
     ▼
-FhirStore.create()
+FhirStore.createResource()
     │  INSERT INTO "Patient" (id, versionId, content, lastUpdated, deleted, ...)
+    │  INSERT INTO "Patient_History" (id, versionId, content, ...)
     │
     ▼
 IndexingPipeline.index()
@@ -207,14 +227,14 @@ searchResources({ resourceType: 'Patient', queryParams: { birthdate: 'ge1990-01-
 parseSearchRequest('Patient', params, spRegistry)
     │
     ▼
-buildSearchSQLv2(request, spRegistry)
+buildSearchSQLv2(request, spRegistry, dialect?)
     │  SELECT id, versionId, content, lastUpdated, deleted
     │  FROM "Patient"
     │  WHERE deleted = 0 AND "__birthDate" >= ?
     │  ORDER BY ... LIMIT ? OFFSET ?
     │
     ▼
-adapter.query(sql, params)
+adapter.query(sql, params)   ← PostgresAdapter auto-rewrites ? → $1, $2, ...
     │
     ▼
 SearchExecutor: resolve _include / _revinclude
@@ -232,7 +252,7 @@ IGPersistenceManager.initialize(input)
 PackageRegistryRepo.checkStatus(name, checksum)
     │
     ├── 'consistent' → no-op (return immediately)
-    ├── 'new'        → apply full DDL
+    ├── 'new'        → apply full DDL (dialect-aware)
     └── 'upgrade'    → diff + apply delta
             │
             ▼
@@ -240,7 +260,7 @@ PackageRegistryRepo.checkStatus(name, checksum)
             │
             ▼
         generateMigration(deltas, dialect) → { up: string[], reindexDeltas }
-            │
+            │                                  ↑ 'sqlite' or 'postgres'
             ▼
         MigrationRunnerV2.applyIGMigration(migration)
             │
@@ -253,35 +273,37 @@ PackageRegistryRepo.checkStatus(name, checksum)
 ## Test Coverage
 
 ```
-1035 tests passing (v2)
+1014 tests (1006 passing, 8 skipped) across 56 test files
 
-Stage 1-9:      295 tests  (StorageAdapter → Production Hardening)
-Second-Pass:     92 tests  (ADR compliance verification)
-Phase A:         37 tests  (IndexingPipeline, LookupTableWriter, FhirPersistence)
-Phase B:         23 tests  (Chain search, SearchPlanner, Two-phase SQL)
-Stage B1-B6:     94 tests  (Provider bridges, FhirSystem, PackageRegistry, ConditionalService)
-Production:     ~50 tests  (BetterSqlite3Adapter, _include:iterate, streaming, benchmark)
-+ additional test suites
+Key test suites:
+- Dual-backend validation:  41 tests  (DDL + IG lifecycle + CRUD on SQLite & PostgreSQL)
+- PostgreSQL integration:   23 tests  (CRUD, transactions, DDL, migrations, search SQL)
+- Storage adapters:         ~40 tests  (BetterSqlite3Adapter, PostgresAdapter)
+- CRUD & versioning:       ~80 tests  (FhirStore, FhirPersistence, soft delete, history)
+- Search engine:           ~120 tests  (all SP types, chain search, planner, two-phase)
+- Schema & migration:      ~60 tests  (DDL generation, schema diff, migration runner)
+- Indexing pipeline:        ~50 tests  (column, token, lookup table strategies)
+- Bundle processing:        ~30 tests  (transaction, batch, conditional CRUD)
+- Provider bridges:         ~20 tests  (FhirDefinitionBridge, FhirRuntimeProvider)
 ```
 
 ---
 
 ## Compatibility
 
-| Environment | Adapter | Status |
-|---|---|---|
-| Node.js 18+ | `BetterSqlite3Adapter` | Production recommended |
-| Node.js 18+ | `SQLiteAdapter` (sql.js) | Supported |
-| Browser / WASM | `SQLiteAdapter` (sql.js) | Supported |
-| PostgreSQL | `PostgresAdapter` | Supported (needs `pg`) |
-| Electron | `BetterSqlite3Adapter` | Supported |
+| Environment | Adapter                | Status                              |
+| ----------- | ---------------------- | ----------------------------------- |
+| Node.js 18+ | `BetterSqlite3Adapter` | Production recommended (SQLite)     |
+| Node.js 18+ | `PostgresAdapter`      | Production recommended (PostgreSQL) |
+| Electron    | `BetterSqlite3Adapter` | Supported                           |
 
 ---
 
 ## What's Next
 
-`fhir-persistence` v0.1.0 is the foundation for:
+`fhir-persistence` v0.3.0 is the foundation for:
 
+- **Phase D** — Full PostgreSQL compatibility for auxiliary systems (PackageRegistryRepo, TerminologyCodeRepo, MigrationRunnerV2, ReindexScheduler)
 - **fhir-engine** — central orchestrator that bootstraps definition + runtime + persistence
 - **fhir-server** — HTTP FHIR R4 REST API
 - **fhir-cli** — migration and reindex CLI tools
