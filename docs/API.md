@@ -1,6 +1,6 @@
 # fhir-persistence — API Reference
 
-Version: 0.5.0
+Version: 0.6.0
 
 ---
 
@@ -432,19 +432,88 @@ const vsRepo = new ValueSetRepo(adapter);
 
 ---
 
+## Conditional Operations
+
+### `ConditionalService`
+
+FHIR R4 conditional create/update/delete with transactional TOCTOU protection.
+
+```typescript
+import { ConditionalService } from "fhir-persistence";
+
+const conditionalService = new ConditionalService(adapter, spRegistry);
+```
+
+**Methods:**
+
+| Method                                            | Returns                            | Description                                |
+| ------------------------------------------------- | ---------------------------------- | ------------------------------------------ |
+| `conditionalCreate(type, resource, searchParams)` | `Promise<ConditionalCreateResult>` | 0 match → create, 1 → existing, 2+ → error |
+| `conditionalUpdate(type, resource, searchParams)` | `Promise<ConditionalUpdateResult>` | 0 match → create, 1 → update, 2+ → error   |
+| `conditionalDelete(type, searchParams)`           | `Promise<ConditionalDeleteResult>` | Delete all matching, return count          |
+
+**Result Types:**
+
+```typescript
+interface ConditionalCreateResult<T> {
+  outcome: "created" | "existing";
+  resource: T;
+}
+
+interface ConditionalUpdateResult<T> {
+  outcome: "created" | "updated";
+  resource: T;
+}
+
+interface ConditionalDeleteResult {
+  count: number;
+}
+```
+
+**Errors:**
+
+- `PreconditionFailedError` (HTTP 412) — thrown when conditional create/update matches 2+ resources
+
+---
+
+## Reindex Utilities
+
+```typescript
+import { reindexResourceTypeV2, reindexAllV2 } from "fhir-persistence";
+import type { ReindexProgressCallbackV2 } from "fhir-persistence";
+
+// Reindex a single resource type with progress
+const onProgress: ReindexProgressCallbackV2 = ({
+  resourceType,
+  processed,
+  total,
+}) => {
+  console.log(`${resourceType}: ${processed}/${total}`);
+};
+
+const result = await reindexResourceTypeV2(adapter, "Patient", onProgress);
+// result: { processed: number, updated: number, errors: number }
+
+// Reindex all resource types
+const allResult = await reindexAllV2(
+  adapter,
+  ["Patient", "Observation"],
+  onProgress,
+);
+```
+
+---
+
 ## Production Utilities
 
 ```typescript
-import { ResourceCacheV2, SearchLogger, reindexAllV2 } from "fhir-persistence";
+import { ResourceCacheV2, SearchLogger } from "fhir-persistence";
 
 // In-memory cache
 const cache = new ResourceCacheV2({ maxSize: 1000, ttlMs: 60_000 });
 
 // Search logging
 const logger = new SearchLogger();
-
-// Reindex CLI
-await reindexAllV2(adapter, spRegistry, pipeline);
 ```
 
 ---
@@ -453,22 +522,27 @@ await reindexAllV2(adapter, spRegistry, pipeline);
 
 Key exported types:
 
-| Type                     | Module     | Description                              |
-| ------------------------ | ---------- | ---------------------------------------- |
-| `StorageAdapter`         | db         | Database abstraction                     |
-| `TransactionContext`     | db         | Async transaction callback context       |
-| `SqlDialect`             | db         | SQL syntax abstraction interface         |
-| `BetterSqlite3Options`   | db         | better-sqlite3 config                    |
-| `FhirPersistenceOptions` | store      | Persistence facade config                |
-| `FhirResource`           | repo       | Base FHIR resource shape                 |
-| `PersistedResource`      | repo       | Resource with id/versionId/lastUpdated   |
-| `SearchRequest`          | search     | Parsed search parameters                 |
-| `SearchResult`           | repo       | Search result with pagination            |
-| `SearchBundle`           | search     | FHIR Bundle search response              |
-| `ResourceTableSet`       | schema     | Main + History + References schema       |
-| `SearchParameterImpl`    | registry   | Indexed search parameter                 |
-| `SchemaDelta`            | migration  | Schema diff entry                        |
-| `GeneratedMigration`     | migration  | Migration DDL statements                 |
-| `MigrationV2`            | migrations | Migration definition (version, up, down) |
-| `IGInitResult`           | migration  | IG initialization result                 |
-| `IndexResult`            | repo       | Indexing pipeline result                 |
+| Type                        | Module     | Description                              |
+| --------------------------- | ---------- | ---------------------------------------- |
+| `StorageAdapter`            | db         | Database abstraction                     |
+| `TransactionContext`        | db         | Async transaction callback context       |
+| `SqlDialect`                | db         | SQL syntax abstraction interface         |
+| `BetterSqlite3Options`      | db         | better-sqlite3 config                    |
+| `FhirPersistenceOptions`    | store      | Persistence facade config                |
+| `FhirResource`              | repo       | Base FHIR resource shape                 |
+| `PersistedResource`         | repo       | Resource with id/versionId/lastUpdated   |
+| `SearchRequest`             | search     | Parsed search parameters                 |
+| `SearchResult`              | repo       | Search result with pagination            |
+| `SearchBundle`              | search     | FHIR Bundle search response              |
+| `ResourceTableSet`          | schema     | Main + History + References schema       |
+| `SearchParameterImpl`       | registry   | Indexed search parameter                 |
+| `SchemaDelta`               | migration  | Schema diff entry                        |
+| `GeneratedMigration`        | migration  | Migration DDL statements                 |
+| `MigrationV2`               | migrations | Migration definition (version, up, down) |
+| `IGInitResult`              | migration  | IG initialization result                 |
+| `IndexResult`               | repo       | Indexing pipeline result                 |
+| `ConditionalCreateResult`   | store      | Conditional create outcome               |
+| `ConditionalUpdateResult`   | store      | Conditional update outcome               |
+| `ConditionalDeleteResult`   | store      | Conditional delete outcome               |
+| `PreconditionFailedError`   | repo       | Multiple-match conditional error         |
+| `ReindexProgressCallbackV2` | cli        | Reindex progress callback type           |

@@ -1,6 +1,6 @@
 # fhir-persistence — Overview
 
-Version: 0.4.0
+Version: 0.6.0
 
 ---
 
@@ -299,11 +299,18 @@ Key test suites:
 
 ---
 
+## What's New in v0.6.0
+
+- **Full-text search** — SQLite FTS5 virtual tables + PostgreSQL tsvector/GIN expression indexes for HumanName, Address lookup tables
+- **Reindex progress callbacks** — `ReindexProgressCallbackV2` in `cli/reindex.ts` with `onProgress` reporting per batch
+- **Conditional operations** — `ConditionalService` with `conditionalCreate` / `conditionalUpdate` / `conditionalDelete` (FHIR R4 semantics, transactional TOCTOU protection)
+- **FhirSystem fullTextSearch config** — `features.fullTextSearch` option for enabling FTS query paths
+
 ## What's Next
 
-`fhir-persistence` v0.5.0 is the foundation for:
+`fhir-persistence` v0.6.0 is the foundation for:
 
 - **fhir-engine** — central orchestrator that bootstraps definition + runtime + persistence
 - **fhir-server** — HTTP FHIR R4 REST API
-- **fhir-cli** — migration and reindex CLI tools
+- **fhir-cli** — migration and reindex CLI tools with progress display
 - **fhir-studio** — GUI for FHIR resource browsing and editing

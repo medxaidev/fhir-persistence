@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-03-17
+
+### Added
+
+#### Full-Text Search (SQLite FTS5 + PostgreSQL tsvector/GIN)
+
+- **`table-schema-builder.ts`** — HumanName and Address lookup tables now include tsvector GIN expression indexes (`to_tsvector('simple'::regconfig, column)`) for PostgreSQL full-text search
+- **`where-builder.ts`** — Lookup table string search supports FTS query paths: SQLite FTS5 MATCH and PostgreSQL `to_tsvector @@ plainto_tsquery` with automatic fallback to LIKE
+- **`fhir-system.ts`** — `FhirSystemConfig.features.fullTextSearch` option to enable FTS query paths (default: `false` for backward compatibility)
+- SQLite FTS5 virtual tables generated via `MigrationGenerator` for HumanName/Address lookup columns
+
+#### Reindex Progress Callbacks
+
+- **`cli/reindex.ts`** — `ReindexProgressCallbackV2` type with `onProgress` callback reporting `{ resourceType, processed, total }` per batch
+- **`reindexResourceTypeV2`** and **`reindexAllV2`** accept optional `onProgress` parameter for CLI and UI progress display
+
+#### Conditional Operations API
+
+- **`store/conditional-service.ts`** — `ConditionalService` class with full FHIR R4 conditional semantics:
+  - `conditionalCreate`: 0 match → create, 1 match → return existing, 2+ → `PreconditionFailedError`
+  - `conditionalUpdate`: 0 match → create, 1 match → update, 2+ → `PreconditionFailedError`
+  - `conditionalDelete`: delete all matching resources, return count
+- **`repo/errors.ts`** — `PreconditionFailedError` (HTTP 412) for multiple-match conditional operations
+- All conditional operations execute within transactions (TOCTOU protection)
+
+### Changed
+
+- **`table-schema-builder.ts`** — HumanName lookup table adds `pg_trgm` GIN indexes (`gin_trgm_ops`) alongside tsvector indexes for trigram fuzzy matching
+- **`migration-generator.ts`** — Automatically creates `pg_trgm` and `btree_gin` extensions on PostgreSQL before GIN index generation
+
 ## [0.5.0] - 2025-03-16
 
 ### Fixed

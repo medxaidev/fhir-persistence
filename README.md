@@ -5,7 +5,7 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 [![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-> **v0.5.0** — PostgreSQL migration path complete: GIN extensions + lookup table fixes
+> **v0.6.0** — Full-text search (SQLite FTS5 + PostgreSQL tsvector/GIN), reindex progress callbacks, conditional operations API
 
 ## Features
 
@@ -21,7 +21,9 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 - **Two-phase SQL** — id-first query for large table performance
 - **IG-driven schema** — StructureDefinition + SearchParameter → DDL (SQLite + PostgreSQL dialects)
 - **Migration engine** — SchemaDiff → MigrationGenerator → MigrationRunnerV2
-- **Conditional operations** — conditionalCreate / conditionalUpdate / conditionalDelete
+- **Full-text search** — SQLite FTS5 + PostgreSQL tsvector/GIN for string search parameters
+- **Conditional operations** — conditionalCreate / conditionalUpdate / conditionalDelete via `ConditionalService`
+- **Reindex progress** — `onProgress` callback for CLI and UI progress reporting
 - **Bundle processing** — transaction and batch bundle support
 - **Terminology** — TerminologyCodeRepo + ValueSetRepo
 - **FhirSystem orchestrator** — end-to-end startup flow for `fhir-engine` integration
