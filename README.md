@@ -5,7 +5,7 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 [![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-> **v0.6.0** — Full-text search (SQLite FTS5 + PostgreSQL tsvector/GIN), reindex progress callbacks, conditional operations API
+> **v0.6.1** — Dependency upgrade: fhir-runtime ^0.10.0 (Profile Slicing & Choice Type support)
 
 ## Features
 

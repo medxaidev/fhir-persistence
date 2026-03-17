@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2025-03-18
+
+### Changed
+
+- **`fhir-runtime` dependency** — Upgraded from `^0.8.1` to `^0.10.0` to align with fhir-runtime v0.10.0 (STAGE-7: Profile Slicing & Choice Type utilities)
+- No code changes required — `FhirRuntimeProvider` uses structural typing and is fully compatible with the new fhir-runtime API surface
+
+### Notes
+
+- fhir-runtime v0.10.0 adds: Slicing API (`matchSlice`, `countSliceInstances`, `generateSliceSkeleton`), Choice Type utilities, BackboneElement helpers, and `inferComplexType` bug fix
+- These new APIs are available to consumers via fhir-runtime but do not affect fhir-persistence internals
+
 ## [0.6.0] - 2025-03-17
 
 ### Added
