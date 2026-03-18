@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-03-18
+
+### Added
+
+#### Conformance Storage Module (`src/conformance/`)
+
+New module for IG-related conformance resource management, unblocking IG Explorer (Phase-fhir-server-004):
+
+- **`IGResourceMapRepo`** (P1) — `ig_resource_map` table tracking IG → resource mappings with grouped index queries
+- **`SDIndexRepo`** (P2) — `structure_definition_index` table for fast SD queries by type, kind, base definition
+- **`ElementIndexRepo`** (P3) — `structure_element_index` table for element-level queries across SDs (dialect-aware: SQLite INTEGER vs PostgreSQL BOOLEAN/JSONB)
+- **`ExpansionCacheRepo`** (P4) — `value_set_expansion` cache table for ValueSet expansion results (dialect-aware timestamps)
+- **`ConceptHierarchyRepo`** (P5) — `code_system_concept` hierarchical table with parent-child relationships and level queries
+- **`SearchParamIndexRepo`** (B1) — `search_parameter_index` table for IG-scoped SearchParameter tracking
+- **`IGImportOrchestrator`** (B2) — Coordinates all repos for complete IG import pipeline; accepts optional fhir-runtime extraction functions (`extractElementIndex`, `flattenConcepts`, `extractDependencies`)
+
+All repos follow existing patterns: `StorageAdapter` + `DDLDialect`, `?` placeholders, SQLite/PostgreSQL dual-backend support.
+
+### Changed
+
+- **`fhir-runtime` dependency** — Upgraded from `^0.10.0` to `^0.11.0` (IG extraction API: `extractSDDependencies`, `extractElementIndexRows`, `flattenConceptHierarchy`)
+- **`src/index.ts`** — Added conformance module exports (7 classes + 9 types)
+
+### Test Coverage
+
+- **1061 total tests** (1053 passing, 8 skipped) across 63 test files — no regressions
+- **47 new conformance tests** covering all 6 repos + orchestrator (SQLite in-memory)
+
 ## [0.6.1] - 2025-03-18
 
 ### Changed

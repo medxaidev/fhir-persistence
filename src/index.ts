@@ -211,3 +211,17 @@ export type { FhirSystemOptions, FhirSystemReady } from './startup/fhir-system.j
 export { FhirDefinitionBridge } from './providers/fhir-definition-provider.js';
 export { FhirRuntimeProvider, createFhirRuntimeProvider } from './providers/fhir-runtime-provider.js';
 export type { FhirRuntimeProviderOptions } from './providers/fhir-runtime-provider.js';
+
+// ─── Conformance Module (IG resource management) ────────────────────────────
+export { IGResourceMapRepo } from './conformance/ig-resource-map-repo.js';
+export { SDIndexRepo } from './conformance/sd-index-repo.js';
+export { ElementIndexRepo } from './conformance/element-index-repo.js';
+export { ExpansionCacheRepo } from './conformance/expansion-cache-repo.js';
+export { ConceptHierarchyRepo } from './conformance/concept-hierarchy-repo.js';
+export { SearchParamIndexRepo } from './conformance/search-param-index-repo.js';
+export { IGImportOrchestrator } from './conformance/ig-import-orchestrator.js';
+export type {
+  IGResourceMapEntry, IGIndex, SDIndexEntry, ElementIndexEntry,
+  CachedExpansion, ConceptHierarchyEntry, SearchParamIndexEntry,
+  IGImportOptions, IGImportResult,
+} from './conformance/index.js';
