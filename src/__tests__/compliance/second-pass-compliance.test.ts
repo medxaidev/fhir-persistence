@@ -186,16 +186,17 @@ describe('ADR-09: Search Execution Engine', () => {
     expect(result!.sql).not.toContain('ARRAY[');
   });
 
-  it('OR semantics: multi-value param generates OR clause', () => {
+  it('OR semantics: multi-value bare code param generates OR of LIKE patterns', () => {
     const params: ParsedSearchParam[] = [
       { code: 'status', values: ['final', 'preliminary'] },
     ];
     const result = buildWhereClauseV2(params, registry, 'Observation');
     expect(result).not.toBeNull();
-    // Multi-value produces IN (?, ?) which is OR semantics
-    expect(result!.sql).toContain('IN (?, ?)');
-    expect(result!.values).toContain('final');
-    expect(result!.values).toContain('preliminary');
+    // Multi-value bare codes produce OR of LIKE patterns (any system match)
+    expect(result!.sql).toContain('LIKE ?');
+    expect(result!.sql).toContain('OR');
+    expect(result!.values).toContain('%|final');
+    expect(result!.values).toContain('%|preliminary');
   });
 });
 

@@ -116,9 +116,41 @@ describe('WHERE Builder v2', () => {
   });
 
   // =========================================================================
+  // 6c. Bug-3 regression: bare code uses LIKE, |code uses exact match
+  // =========================================================================
+  it('bare code uses LIKE %|code to match any system (Bug-3 regression)', () => {
+    const impl = mockImpl({
+      code: 'gender',
+      type: 'token',
+      strategy: 'token-column',
+      columnName: 'gender',
+      array: true,
+    });
+    const param: ParsedSearchParam = { code: 'gender', values: ['male'] };
+    const frag = buildWhereFragmentV2(impl, param);
+    expect(frag!.sql).toContain('json_each');
+    expect(frag!.sql).toContain('LIKE ?');
+    expect(frag!.values).toEqual(['%|male']);
+  });
+
+  it('|code uses exact match against stored |code (Bug-3 regression)', () => {
+    const impl = mockImpl({
+      code: 'gender',
+      type: 'token',
+      strategy: 'token-column',
+      columnName: 'gender',
+      array: true,
+    });
+    const param: ParsedSearchParam = { code: 'gender', values: ['|male'] };
+    const frag = buildWhereFragmentV2(impl, param);
+    expect(frag!.sql).toContain('json_each.value = ?');
+    expect(frag!.values).toEqual(['|male']);
+  });
+
+  // =========================================================================
   // 7. Token: :not modifier
   // =========================================================================
-  it('token :not uses NOT EXISTS json_each', () => {
+  it('token :not with bare code uses NOT LIKE via json_each', () => {
     const impl = mockImpl({
       code: 'status',
       type: 'token',
@@ -128,9 +160,25 @@ describe('WHERE Builder v2', () => {
     });
     const param: ParsedSearchParam = { code: 'status', modifier: 'not', values: ['cancelled'] };
     const frag = buildWhereFragmentV2(impl, param);
+    expect(frag!.sql).toContain('NOT');
+    expect(frag!.sql).toContain('json_each');
+    expect(frag!.sql).toContain('LIKE ?');
+    expect(frag!.values).toEqual(['%|cancelled']);
+  });
+
+  it('token :not with system|code uses NOT EXISTS exact match', () => {
+    const impl = mockImpl({
+      code: 'status',
+      type: 'token',
+      strategy: 'token-column',
+      columnName: 'status',
+      array: true,
+    });
+    const param: ParsedSearchParam = { code: 'status', modifier: 'not', values: ['http://hl7.org|cancelled'] };
+    const frag = buildWhereFragmentV2(impl, param);
     expect(frag!.sql).toContain('NOT EXISTS');
     expect(frag!.sql).toContain('json_each');
-    expect(frag!.values).toEqual(['cancelled']);
+    expect(frag!.values).toEqual(['http://hl7.org|cancelled']);
   });
 
   // =========================================================================

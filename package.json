@@ -1,6 +1,6 @@
 {
   "name": "fhir-persistence",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Embedded FHIR R4 persistence layer — CRUD, search, indexing, schema migration over SQLite and PostgreSQL",
   "homepage": "https://github.com/medxaidev/fhir-persistence#readme",
   "license": "MIT",

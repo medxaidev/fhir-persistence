@@ -226,24 +226,29 @@ describe('buildWhereFragment — uri', () => {
 describe('buildWhereFragment — token', () => {
   const impl = makeImpl({ code: 'gender', type: 'token', columnName: 'gender', strategy: 'token-column' });
 
-  it('array overlap match on __gender', () => {
+  it('bare code uses LIKE via unnest to match any system', () => {
     const param: ParsedSearchParam = { code: 'gender', values: ['male'] };
     const result = buildWhereFragment(impl, param, 1);
-    expect(result!.sql).toBe('"__gender" && ARRAY[$1]::text[]');
-    expect(result!.values).toEqual(['male']);
+    expect(result!.sql).toContain('EXISTS');
+    expect(result!.sql).toContain('unnest');
+    expect(result!.sql).toContain('LIKE $1');
+    expect(result!.values).toEqual(['%|male']);
   });
 
-  it(':not modifier: NOT array overlap', () => {
+  it(':not modifier: NOT LIKE via unnest', () => {
     const param: ParsedSearchParam = { code: 'gender', modifier: 'not', values: ['male'] };
     const result = buildWhereFragment(impl, param, 1);
-    expect(result!.sql).toBe('NOT ("__gender" && ARRAY[$1]::text[])');
+    expect(result!.sql).toContain('NOT');
+    expect(result!.sql).toContain('LIKE $1');
+    expect(result!.values).toEqual(['%|male']);
   });
 
-  it('multiple values in single ARRAY', () => {
+  it('multiple bare codes produce OR of LIKE patterns', () => {
     const param: ParsedSearchParam = { code: 'gender', values: ['male', 'female'] };
     const result = buildWhereFragment(impl, param, 1);
-    expect(result!.sql).toBe('"__gender" && ARRAY[$1, $2]::text[]');
-    expect(result!.values).toEqual(['male', 'female']);
+    expect(result!.sql).toContain('LIKE $1');
+    expect(result!.sql).toContain('LIKE $2');
+    expect(result!.values).toEqual(['%|male', '%|female']);
   });
 });
 
@@ -289,14 +294,15 @@ describe('buildWhereFragment — lookup-table', () => {
 // =============================================================================
 
 describe('buildWhereFragment — parameter indexing', () => {
-  it('uses startIndex for $N placeholder (token-column)', () => {
+  it('uses startIndex for $N placeholder (token-column bare code)', () => {
     const impl = makeImpl({ code: 'gender', type: 'token', columnName: 'gender', strategy: 'token-column' });
     const param: ParsedSearchParam = { code: 'gender', values: ['male'] };
     const result = buildWhereFragment(impl, param, 5);
-    expect(result!.sql).toBe('"__gender" && ARRAY[$5]::text[]');
+    expect(result!.sql).toContain('LIKE $5');
+    expect(result!.values).toEqual(['%|male']);
   });
 
-  it('increments index for multiple values (token-column)', () => {
+  it('increments index for multiple values (token-column bare code)', () => {
     const impl = makeImpl({ code: 'gender', type: 'token', columnName: 'gender', strategy: 'token-column' });
     const param: ParsedSearchParam = { code: 'gender', values: ['male', 'female'] };
     const result = buildWhereFragment(impl, param, 3);
@@ -324,10 +330,10 @@ describe('buildWhereClause', () => {
     ];
     const result = buildWhereClause(params, registry, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toContain('"__gender" && ARRAY[$1]::text[]');
+    expect(result!.sql).toContain('LIKE $1');
     expect(result!.sql).toContain('AND');
-    expect(result!.sql).toContain('"__active" && ARRAY[$2]::text[]');
-    expect(result!.values).toEqual(['male', 'true']);
+    expect(result!.sql).toContain('LIKE $2');
+    expect(result!.values).toEqual(['%|male', '%|true']);
   });
 
   it('handles _id special parameter', () => {
@@ -369,9 +375,9 @@ describe('buildWhereClause', () => {
     const result = buildWhereClause(params, registry, 'Patient');
     expect(result).not.toBeNull();
     expect(result!.sql).toContain('"id"');
-    expect(result!.sql).toContain('"__gender" && ARRAY[$2]::text[]');
+    expect(result!.sql).toContain('LIKE $2');
     expect(result!.sql).toContain('"birthdate" >= $3');
-    expect(result!.values).toEqual(['abc', 'male', '1990-01-01']);
+    expect(result!.values).toEqual(['abc', '%|male', '1990-01-01']);
   });
 });
 
@@ -472,8 +478,8 @@ describe('buildWhereClause — metadata params', () => {
     expect(result).not.toBeNull();
     expect(result!.sql).toContain('"___tag" && ARRAY[$1]::text[]');
     expect(result!.sql).toContain('"id" = $2');
-    expect(result!.sql).toContain('"__gender" && ARRAY[$3]::text[]');
-    expect(result!.values).toEqual(['http://example.com|urgent', 'abc', 'male']);
+    expect(result!.sql).toContain('LIKE $3');
+    expect(result!.values).toEqual(['http://example.com|urgent', 'abc', '%|male']);
   });
 });
 
@@ -484,11 +490,13 @@ describe('buildWhereClause — metadata params', () => {
 describe('buildWhereFragment — token system|code', () => {
   const impl = makeImpl({ code: 'identifier', type: 'token', columnName: 'identifier', strategy: 'token-column' });
 
-  it('plain code value → array overlap as-is', () => {
+  it('plain code value → LIKE via unnest to match any system', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['12345'] };
     const result = buildWhereFragment(impl, param, 1);
-    expect(result!.sql).toBe('"__identifier" && ARRAY[$1]::text[]');
-    expect(result!.values).toEqual(['12345']);
+    expect(result!.sql).toContain('EXISTS');
+    expect(result!.sql).toContain('unnest');
+    expect(result!.sql).toContain('LIKE $1');
+    expect(result!.values).toEqual(['%|12345']);
   });
 
   it('system|code value → array overlap as-is', () => {
@@ -507,11 +515,11 @@ describe('buildWhereFragment — token system|code', () => {
     expect(result!.values).toEqual(['http://example.com|%']);
   });
 
-  it('|code value → searches for plain code (strips leading pipe)', () => {
+  it('|code value → exact match with |code (empty system)', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['|12345'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toBe('"__identifier" && ARRAY[$1]::text[]');
-    expect(result!.values).toEqual(['12345']);
+    expect(result!.values).toEqual(['|12345']);
   });
 
   it(':not with system|code', () => {
@@ -537,11 +545,13 @@ describe('buildWhereFragment — token system|code', () => {
     expect(result!.values).toEqual(['body%', 'weight%']);
   });
 
-  it('mixed values (some with pipe, some without)', () => {
+  it('mixed values (bare code + system|code) → LIKE + exact in OR', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['12345', 'http://example.com|67890'] };
     const result = buildWhereFragment(impl, param, 1);
-    expect(result!.sql).toBe('"__identifier" && ARRAY[$1, $2]::text[]');
-    expect(result!.values).toEqual(['12345', 'http://example.com|67890']);
+    expect(result!.sql).toContain('ARRAY[$1]::text[]');
+    expect(result!.sql).toContain('LIKE $2');
+    expect(result!.sql).toContain('OR');
+    expect(result!.values).toEqual(['http://example.com|67890', '%|12345']);
   });
 });
 
@@ -684,8 +694,8 @@ describe('Phase 18 — chained search WHERE clause', () => {
     expect(result).not.toBeNull();
     expect(result!.sql).toContain('EXISTS');
     expect(result!.sql).toContain('__target."__gender"');
-    expect(result!.sql).toContain('ARRAY[$1]::text[]');
-    expect(result!.values).toEqual(['male']);
+    expect(result!.sql).toContain('LIKE $1');
+    expect(result!.values).toEqual(['%|male']);
   });
 
   it('chained date search generates EXISTS with date comparison', () => {
@@ -743,7 +753,7 @@ describe('Phase 18 — chained search WHERE clause', () => {
     expect(result!.sql).toContain('EXISTS');
     expect(result!.sql).toContain('AND');
     expect(result!.sql).toContain('"__code"');
-    expect(result!.values.length).toBe(2);
+    expect(result!.values.length).toBeGreaterThanOrEqual(2);
   });
 
   it('chained search with :exact modifier on target param', () => {

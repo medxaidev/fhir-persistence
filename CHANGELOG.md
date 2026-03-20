@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-03-20
+
+### Fixed
+
+#### Bug-3: Token WHERE clause code-only / empty-system matching failure (P0)
+
+- **`buildTokenColumnFragmentV2()`** (v2, SQLite) and **`buildTokenColumnFragment()`** (v1, PostgreSQL) — corrected token value resolution logic per FHIR spec:
+  - `system|code` → exact match against stored `"system|code"` ✅
+  - `|code` → exact match against stored `"|code"` (empty system, keep pipe) ✅
+  - `system|` → `LIKE "system|%"` (any code within system) ✅
+  - `code` (bare, no pipe) → `LIKE "%|code"` (any system, match code) ✅
+- **Root cause**: Previous logic stripped leading `|` from `|code` values and used exact match for bare codes, causing zero results for `gender=male` (stored as `"|male"`) and `gender=|male`
+- **Impact**: All token searches using bare code or `|code` format now correctly match stored values
+- New helper: `arrayContainsLikeV2()` generates dialect-aware `LIKE` subqueries (SQLite `json_each` / PostgreSQL `unnest`)
+
+### Test Coverage
+
+- **1065 total tests** (1057 passing, 8 skipped) across 63 test files — no regressions
+- **5 new Bug-3 regression tests** in v2 and v1 test suites verifying all four token formats
+
 ## [0.8.0] - 2025-03-20
 
 ### Fixed

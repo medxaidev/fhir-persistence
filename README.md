@@ -5,7 +5,7 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 [![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-> **v0.8.0** — Token search bug fix: DDL/INSERT/WHERE column name alignment
+> **v0.9.0** — Token search fix: FHIR-correct code-only / empty-system matching (`|code`, `code`)
 
 ## Features
 

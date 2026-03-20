@@ -608,57 +608,55 @@ function buildTokenColumnFragment(
     return { sql: `(${conditions.join(' OR ')})`, values: allValues };
   }
 
-  // Check for system| pattern (system with any code) — needs LIKE-based search
-  const needsLike = param.values.some((v) => v.endsWith('|'));
-  if (needsLike) {
-    const conditions: string[] = [];
-    const allValues: unknown[] = [];
-    let idx = startIndex;
-    for (const value of param.values) {
+  // Resolve token values per FHIR spec:
+  //   "system|code"  → exact match against stored "system|code"
+  //   "|code"        → exact match against stored "|code" (empty system)
+  //   "system|"      → LIKE "system|%" (any code within system)
+  //   "code"         → LIKE "%|code" (any system, match code)
+  const exactValues: string[] = [];
+  const likePatterns: string[] = [];
+  for (const value of param.values) {
+    if (value.includes('|')) {
       if (value.endsWith('|')) {
-        // system| → match any entry starting with "system|"
-        conditions.push(
-          `EXISTS (SELECT 1 FROM unnest(${textColumnName}) __t WHERE __t LIKE $${idx})`,
-        );
-        allValues.push(value + '%');
+        likePatterns.push(value + '%');
       } else {
-        // Normal value — array overlap
-        conditions.push(`${textColumnName} && ARRAY[$${idx}]::text[]`);
-        allValues.push(value.startsWith('|') ? value.slice(1) : value);
+        exactValues.push(value);
       }
-      idx++;
+    } else {
+      likePatterns.push(`%|${value}`);
     }
-    const sql = param.modifier === 'not'
-      ? `NOT (${conditions.join(' OR ')})`
-      : conditions.length === 1
-        ? conditions[0]
-        : `(${conditions.join(' OR ')})`;
-    return { sql, values: allValues };
   }
 
-  // For |code pattern, strip the leading pipe and search for plain code
-  const resolvedValues = param.values.map((v) => (v.startsWith('|') ? v.slice(1) : v));
+  // Build fragments for each group
+  const conditions: string[] = [];
+  const allValues: unknown[] = [];
+  let idx = startIndex;
 
-  if (param.modifier === 'not') {
-    // NOT: none of the values should be in the array
-    if (resolvedValues.length === 1) {
-      const sql = `NOT (${textColumnName} && ARRAY[$${startIndex}]::text[])`;
-      return { sql, values: [resolvedValues[0]] };
+  if (exactValues.length > 0) {
+    const placeholders = exactValues.map((_, i) => `$${idx + i}`);
+    if (param.modifier === 'not') {
+      conditions.push(`NOT (${textColumnName} && ARRAY[${placeholders.join(', ')}]::text[])`);
+    } else {
+      conditions.push(`${textColumnName} && ARRAY[${placeholders.join(', ')}]::text[]`);
     }
-    const placeholders = resolvedValues.map((_, i) => `$${startIndex + i}`);
-    const sql = `NOT (${textColumnName} && ARRAY[${placeholders.join(', ')}]::text[])`;
-    return { sql, values: [...resolvedValues] };
+    allValues.push(...exactValues);
+    idx += exactValues.length;
   }
 
-  // Default: array overlap — any of the values match
-  if (resolvedValues.length === 1) {
-    const sql = `${textColumnName} && ARRAY[$${startIndex}]::text[]`;
-    return { sql, values: [resolvedValues[0]] };
+  for (const pattern of likePatterns) {
+    const likeSql = `EXISTS (SELECT 1 FROM unnest(${textColumnName}) __t WHERE __t LIKE $${idx})`;
+    conditions.push(param.modifier === 'not' ? `NOT (${likeSql})` : likeSql);
+    allValues.push(pattern);
+    idx++;
   }
 
-  const placeholders = resolvedValues.map((_, i) => `$${startIndex + i}`);
-  const sql = `${textColumnName} && ARRAY[${placeholders.join(', ')}]::text[]`;
-  return { sql, values: [...resolvedValues] };
+  if (conditions.length === 0) {
+    return { sql: '1=1', values: [] };
+  }
+
+  const joiner = param.modifier === 'not' ? ' AND ' : ' OR ';
+  const inner = conditions.length === 1 ? conditions[0] : `(${conditions.join(joiner)})`;
+  return { sql: inner, values: allValues };
 }
 
 // =============================================================================
@@ -1125,36 +1123,54 @@ function buildTokenColumnFragmentV2(
     return buildLikeFragmentV2(sortCol, param.values, '', '%');
   }
 
-  // system| pattern
-  const needsLike = param.values.some(v => v.endsWith('|'));
-  if (needsLike) {
-    const conds: string[] = [];
-    const vals: unknown[] = [];
-    for (const value of param.values) {
+  // Resolve token values per FHIR spec:
+  //   "system|code"  → exact match against stored "system|code"
+  //   "|code"        → exact match against stored "|code" (empty system)
+  //   "system|"      → LIKE "system|%" (any code within system)
+  //   "code"         → LIKE "%|code" (any system, match code)
+  const exactValues: string[] = [];
+  const likePatterns: string[] = [];
+  for (const value of param.values) {
+    if (value.includes('|')) {
       if (value.endsWith('|')) {
-        const frag = arrayContainsLikeV2(textCol, value + '%', dialect);
-        conds.push(frag.sql);
-        vals.push(...frag.values);
+        // system| → any code within that system
+        likePatterns.push(value + '%');
       } else {
-        const resolved = value.startsWith('|') ? value.slice(1) : value;
-        const frag = arrayContainsV2(textCol, [resolved], dialect);
-        conds.push(frag.sql);
-        vals.push(...frag.values);
+        // system|code or |code → exact match (keep as-is)
+        exactValues.push(value);
       }
+    } else {
+      // bare code → any system, LIKE "%|code"
+      likePatterns.push(`%|${value}`);
     }
-    const inner = conds.length === 1 ? conds[0] : `(${conds.join(' OR ')})`;
-    const sql = param.modifier === 'not' ? `NOT (${inner})` : inner;
-    return { sql, values: vals };
   }
 
-  const resolvedValues = param.values.map(v => v.startsWith('|') ? v.slice(1) : v);
+  // Build fragments for each group
+  const conds: string[] = [];
+  const vals: unknown[] = [];
 
-  if (param.modifier === 'not') {
-    return arrayNotContainsV2(textCol, resolvedValues, dialect);
+  if (exactValues.length > 0) {
+    const frag = param.modifier === 'not'
+      ? arrayNotContainsV2(textCol, exactValues, dialect)
+      : arrayContainsV2(textCol, exactValues, dialect);
+    conds.push(frag.sql);
+    vals.push(...frag.values);
   }
 
-  // Default: any value matches
-  return arrayContainsV2(textCol, resolvedValues, dialect);
+  for (const pattern of likePatterns) {
+    const frag = arrayContainsLikeV2(textCol, pattern, dialect);
+    const sql = param.modifier === 'not' ? `NOT (${frag.sql})` : frag.sql;
+    conds.push(sql);
+    vals.push(...frag.values);
+  }
+
+  if (conds.length === 0) {
+    return { sql: '1=1', values: [] };
+  }
+
+  const joiner = param.modifier === 'not' ? ' AND ' : ' OR ';
+  const inner = conds.length === 1 ? conds[0] : `(${conds.join(joiner)})`;
+  return { sql: inner, values: vals };
 }
 
 // -- v2 default --

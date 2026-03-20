@@ -431,8 +431,9 @@ describe('PostgresAdapter Integration (real PG)', () => {
     };
 
     const sql = buildSearchSQLv2(request, spReg, dialect);
-    // PG dialect: token search uses ARRAY operator, not json_each
-    expect(sql.sql).toContain('ARRAY');
+    // PG dialect: bare code token search uses unnest LIKE (any system), not json_each
+    expect(sql.sql).toContain('unnest');
+    expect(sql.sql).toContain('LIKE');
     expect(sql.sql).not.toContain('json_each');
   });
 
@@ -452,6 +453,7 @@ describe('PostgresAdapter Integration (real PG)', () => {
 
     const sql = buildCountSQLv2(request, spReg, dialect);
     expect(sql.sql).toContain('COUNT(*)');
+    expect(sql.sql).toContain('unnest');
     expect(sql.sql).not.toContain('json_each');
   });
 
