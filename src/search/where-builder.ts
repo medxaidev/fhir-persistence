@@ -588,10 +588,9 @@ function buildTokenColumnFragment(
   startIndex: number,
 ): WhereFragment {
   // For token-column strategy, the actual DB columns are:
-  //   __<name>     UUID[]  (hash column)
-  //   __<name>Text TEXT[]  (system|code text column)
-  //   __<name>Sort TEXT    (first display/text value for sorting)
-  const textColumnName = quoteColumn(`__${impl.columnName}Text`);
+  //   __<name>     TEXT  (JSON array of "system|code" strings in SQLite, TEXT[] in PG)
+  //   __<name>Sort TEXT  (first display/text value for sorting)
+  const textColumnName = quoteColumn(`__${impl.columnName}`);
   const sortColumnName = quoteColumn(`__${impl.columnName}Sort`);
 
   // :text modifier — search display text via sort column with ILIKE prefix match
@@ -1117,8 +1116,8 @@ function buildTokenColumnFragmentV2(
   param: ParsedSearchParam,
   dialect?: SqlDialect,
 ): WhereFragment {
-  // v2 token columns: __<name>Text is a JSON array string (TEXT), __<name>Sort is TEXT
-  const textCol = quoteColumn(`__${impl.columnName}Text`);
+  // v2 token columns: __<name> is a JSON array of "system|code" strings (TEXT), __<name>Sort is TEXT
+  const textCol = quoteColumn(`__${impl.columnName}`);
   const sortCol = quoteColumn(`__${impl.columnName}Sort`);
 
   // :text modifier — search display text via sort column

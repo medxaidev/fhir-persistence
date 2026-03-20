@@ -99,6 +99,23 @@ describe('WHERE Builder v2', () => {
   });
 
   // =========================================================================
+  // 6b. Bug-1 regression: token column name matches DDL (__code, not __codeText)
+  // =========================================================================
+  it('token column references __<name> not __<name>Text (Bug-1 regression)', () => {
+    const impl = mockImpl({
+      code: 'gender',
+      type: 'token',
+      strategy: 'token-column',
+      columnName: 'gender',
+      array: true,
+    });
+    const param: ParsedSearchParam = { code: 'gender', values: ['male'] };
+    const frag = buildWhereFragmentV2(impl, param);
+    expect(frag!.sql).toContain('"__gender"');
+    expect(frag!.sql).not.toContain('"__genderText"');
+  });
+
+  // =========================================================================
   // 7. Token: :not modifier
   // =========================================================================
   it('token :not uses NOT EXISTS json_each', () => {

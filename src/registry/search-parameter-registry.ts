@@ -52,7 +52,7 @@ export type SearchParamType =
  * Physical storage strategy for a search parameter.
  *
  * - `column` — single column in the main table
- * - `token-column` — three columns (UUID[], TEXT[], TEXT) for token search
+ * - `token-column` — two columns: TEXT (JSON array of "system|code"), TEXT (sort/display)
  * - `lookup-table` — separate lookup table; only a sort column in main table
  */
 export type SearchStrategy = 'column' | 'token-column' | 'lookup-table';

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-03-20
+
+### Fixed
+
+#### Bug-1 + Bug-2: Token-column WHERE clause column name mismatch (P0)
+
+- **`buildTokenColumnFragment()`** (v1, PostgreSQL `$N` placeholders) — changed `__${columnName}Text` → `__${columnName}` to match DDL column name
+- **`buildTokenColumnFragmentV2()`** (v2, SQLite `?` placeholders) — same fix, aligning with DDL `__<name>` column
+- **Root cause**: WHERE clause referenced a non-existent `__genderText` column while DDL only creates `__gender` (TEXT, JSON array of `system|code` strings) and `__genderSort` (TEXT, display)
+- **Impact**: All token search queries (`GET /Patient?gender=male`) previously failed with `no such column: __genderText`
+- DDL / INSERT / WHERE column names now fully aligned: `__<name>` for token array, `__<name>Sort` for display text
+
+### Changed
+
+- **`search-parameter-registry.ts`** — Corrected `SearchStrategy` documentation: token-column uses 2 columns (not 3)
+
+### Confirmed
+
+- **Enh-1**: R4 standard SP loading (`name`, `identifier`, etc.) depends on external `DefinitionProvider` — not a persistence-layer issue
+- **Enh-2**: `ifMatch` optimistic locking is fully implemented in both `FhirStore` and `FhirPersistence` with test coverage
+
+### Test Coverage
+
+- **1062 total tests** (1054 passing, 8 skipped) across 63 test files — no regressions
+- **1 new regression test** for Bug-1: verifies token column references `__<name>` not `__<name>Text`
+
 ## [0.7.0] - 2025-03-18
 
 ### Added

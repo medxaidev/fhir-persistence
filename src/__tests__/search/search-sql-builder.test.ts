@@ -61,7 +61,7 @@ describe('buildSearchSQL', () => {
     const result = buildSearchSQL(request, registry);
 
     expect(result.sql).toContain('"deleted" = false');
-    expect(result.sql).toContain('"__genderText" && ARRAY[$1]::text[]');
+    expect(result.sql).toContain('"__gender" && ARRAY[$1]::text[]');
     expect(result.sql).toContain('LIMIT $2');
     expect(result.values).toEqual(['male', 20]);
   });
@@ -76,8 +76,8 @@ describe('buildSearchSQL', () => {
     };
     const result = buildSearchSQL(request, registry);
 
-    expect(result.sql).toContain('"__genderText" && ARRAY[$1]::text[]');
-    expect(result.sql).toContain('"__activeText" && ARRAY[$2]::text[]');
+    expect(result.sql).toContain('"__gender" && ARRAY[$1]::text[]');
+    expect(result.sql).toContain('"__active" && ARRAY[$2]::text[]');
     expect(result.sql).toContain('LIMIT $3');
     expect(result.values).toEqual(['male', 'true', 20]);
   });
@@ -203,7 +203,7 @@ describe('buildSearchSQL', () => {
     expect(result.sql).toContain('SELECT "id", "content", "lastUpdated", "deleted"');
     expect(result.sql).toContain('FROM "Patient"');
     expect(result.sql).toContain('"deleted" = false');
-    expect(result.sql).toContain('"__genderText" && ARRAY[$1]::text[]');
+    expect(result.sql).toContain('"__gender" && ARRAY[$1]::text[]');
     expect(result.sql).toContain('"birthdate" >= $2');
     expect(result.sql).toContain('ORDER BY "birthdate" DESC');
     expect(result.sql).toContain('LIMIT $3');
@@ -291,7 +291,7 @@ describe('buildCountSQL', () => {
     };
     const result = buildCountSQL(request, registry);
 
-    expect(result.sql).toContain('"__genderText" && ARRAY[$1]::text[]');
+    expect(result.sql).toContain('"__gender" && ARRAY[$1]::text[]');
     expect(result.values).toEqual(['male']);
   });
 
@@ -337,7 +337,7 @@ describe('Phase 18 — compartment search SQL', () => {
     const result = buildSearchSQL(request, registry);
 
     expect(result.sql).toContain('"compartments" @> ARRAY[$1]::uuid[]');
-    expect(result.sql).toContain('"__statusText" && ARRAY[$2]::text[]');
+    expect(result.sql).toContain('"__status" && ARRAY[$2]::text[]');
     expect(result.values[0]).toBe('550e8400-e29b-41d4-a716-446655440000');
     expect(result.values[1]).toBe('final');
   });
