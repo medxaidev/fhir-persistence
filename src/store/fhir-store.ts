@@ -38,6 +38,7 @@ import {
   buildDeleteReferencesSQLv2,
   buildInsertReferencesSQLv2,
   buildInstanceHistorySQLv2,
+  buildTypeHistorySQLv2,
 } from '../repo/sql-builder.js';
 import type { ReferenceRowV2 } from '../repo/reference-indexer.js';
 
@@ -53,6 +54,15 @@ export interface CreateResourceOptions {
 export interface UpdateResourceOptions {
   /** Expected versionId for optimistic locking (If-Match header). */
   ifMatch?: string;
+  /** When true, create the resource if it does not exist (PUT-as-Create / upsert). */
+  upsert?: boolean;
+}
+
+export interface UpdateResourceResult<T = PersistedResource> {
+  /** The persisted resource after the operation. */
+  resource: T;
+  /** True if the resource was newly created (upsert), false if updated. */
+  created: boolean;
 }
 
 export interface HistoryOptions {
@@ -155,7 +165,7 @@ export class FhirStore {
     resourceType: string,
     resource: T,
     options?: UpdateResourceOptions,
-  ): Promise<T & PersistedResource> {
+  ): Promise<UpdateResourceResult<T & PersistedResource>> {
     const id = resource.id;
     if (!id) {
       throw new Error('Resource must have an id for update');
@@ -171,9 +181,38 @@ export class FhirStore {
     }>(selectSQL, [id]);
 
     if (!current) {
+      // PERS-01: PUT-as-Create (upsert)
+      if (options?.upsert) {
+        const created = await this.createResource(resourceType, resource, { assignedId: id });
+        return { resource: created, created: true };
+      }
       throw new ResourceNotFoundError(resourceType, id);
     }
     if (current.deleted === 1) {
+      // PERS-01: upsert on deleted resource → re-create
+      if (options?.upsert) {
+        // Overwrite the deleted row with a fresh version
+        const now = new Date().toISOString();
+        const versionId = randomUUID();
+        const persisted = {
+          ...resource, resourceType, id,
+          meta: { ...resource.meta, versionId, lastUpdated: now },
+        } as T & PersistedResource;
+        const content = JSON.stringify(persisted);
+        const mainRow: ResourceRowV2 = {
+          id, versionId, content, lastUpdated: now, deleted: 0,
+          _source: persisted.meta?.source ?? null,
+          _profile: persisted.meta?.profile ? JSON.stringify(persisted.meta.profile) : null,
+        };
+        const historyRow: HistoryRowV2 = { id, versionId, content, lastUpdated: now, deleted: 0 };
+        await this.adapter.transaction(async (tx) => {
+          const updateSQL = buildUpdateMainSQLv2(resourceType, mainRow);
+          await tx.execute(updateSQL.sql, updateSQL.values);
+          const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
+          await tx.execute(histSQL.sql, histSQL.values);
+        });
+        return { resource: persisted, created: true };
+      }
       throw new ResourceGoneError(resourceType, id);
     }
 
@@ -236,7 +275,7 @@ export class FhirStore {
       await tx.execute(delRefSQL, [id]);
     });
 
-    return persisted;
+    return { resource: persisted, created: false };
   }
 
   // ---------------------------------------------------------------------------
@@ -326,6 +365,37 @@ export class FhirStore {
     const { sql, values } = buildInstanceHistorySQLv2(
       `${resourceType}_History`,
       id,
+      options,
+    );
+
+    const rows = await this.adapter.query<{
+      id: string;
+      versionId: string;
+      lastUpdated: string;
+      content: string;
+      deleted: number;
+    }>(sql, values);
+
+    return rows.map((row) => ({
+      id: row.id,
+      versionId: row.versionId,
+      lastUpdated: row.lastUpdated,
+      deleted: row.deleted === 1,
+      resourceType,
+      resource: row.deleted === 1 ? null : (JSON.parse(row.content) as PersistedResource),
+    }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // TYPE-LEVEL HISTORY (PERS-06)
+  // ---------------------------------------------------------------------------
+
+  async readTypeHistory(
+    resourceType: string,
+    options?: HistoryOptions,
+  ): Promise<HistoryEntry[]> {
+    const { sql, values } = buildTypeHistorySQLv2(
+      `${resourceType}_History`,
       options,
     );
 

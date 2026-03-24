@@ -139,10 +139,39 @@ export { PostgresDialect } from './db/postgres-dialect.js';
 
 // ─── FhirStore (basic CRUD) ─────────────────────────────────────────────────
 export { FhirStore } from './store/fhir-store.js';
+export type {
+  UpdateResourceResult as StoreUpdateResourceResult,
+  UpdateResourceOptions as StoreUpdateResourceOptions,
+} from './store/fhir-store.js';
 
 // ─── FhirPersistence (end-to-end facade with indexing) ──────────────────────
 export { FhirPersistence } from './store/fhir-persistence.js';
-export type { FhirPersistenceOptions } from './store/fhir-persistence.js';
+export type {
+  FhirPersistenceOptions,
+  CreateResourceOptions as PersistenceCreateResourceOptions,
+  CreateResourceResult,
+  UpdateResourceOptions as PersistenceUpdateResourceOptions,
+  UpdateResourceResult,
+} from './store/fhir-persistence.js';
+
+// ─── Conditional Service (PERS-03/04) ───────────────────────────────────────
+export { ConditionalService } from './store/conditional-service.js';
+export type {
+  ConditionalCreateResult,
+  ConditionalUpdateResult,
+  ConditionalDeleteResult,
+} from './store/conditional-service.js';
+
+// ─── Transaction / Batch Bundle (PERS-05) ───────────────────────────────────
+export { processTransactionV2, processBatchV2 } from './transaction/bundle-processor.js';
+export type {
+  Bundle,
+  BundleEntry,
+  BundleResponse,
+  BundleResponseEntry,
+} from './transaction/bundle-processor.js';
+export { buildUrnMap, deepResolveUrns } from './transaction/urn-resolver.js';
+export type { UrnTarget } from './transaction/urn-resolver.js';
 
 // ─── Indexing Pipeline ──────────────────────────────────────────────────────
 export { IndexingPipeline } from './repo/indexing-pipeline.js';

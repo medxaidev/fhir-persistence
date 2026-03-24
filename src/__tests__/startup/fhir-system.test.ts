@@ -1,10 +1,10 @@
-/**
+ï»¿/**
  * B4: FhirSystem End-to-End Startup Tests
  *
  * Verifies the complete startup flow:
- * DefinitionProvider â†?Registries â†?IGPersistenceManager â†?FhirPersistence ready
+ * DefinitionProvider éˆ«?Registries éˆ«?IGPersistenceManager éˆ«?FhirPersistence ready
  *
- * ADR-01 Â§4.1, ADR-03, ADR-04
+ * ADR-01 æ‚4.1, ADR-03, ADR-04
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -196,7 +196,7 @@ describe('B4: FhirSystem Startup Flow', () => {
       const r1 = await system.initialize(dp);
       expect(r1.igResult.action).toBe('new');
 
-      // Second init â€?same definitions â†?consistent
+      // Second init éˆ¥?same definitions éˆ«?consistent
       const r2 = await system.initialize(dp);
       expect(r2.igResult.action).toBe('consistent');
       expect(r2.igResult.ddlCount).toBe(0);
@@ -237,7 +237,7 @@ describe('B4: FhirSystem Startup Flow', () => {
       });
       const { persistence } = await system.initialize(dp);
 
-      const created = await persistence.createResource('Patient', {
+      const { resource: created } = await persistence.createResource('Patient', {
         resourceType: 'Patient',
         birthDate: '1990-01-15',
         gender: 'male',
@@ -261,13 +261,13 @@ describe('B4: FhirSystem Startup Flow', () => {
       const { persistence } = await system.initialize(dp);
 
       // Create Patient first
-      const patient = await persistence.createResource('Patient', {
+      const { resource: patient } = await persistence.createResource('Patient', {
         resourceType: 'Patient',
         gender: 'female',
       });
 
       // Create Observation referencing Patient
-      const obs = await persistence.createResource('Observation', {
+      const { resource: obs } = await persistence.createResource('Observation', {
         resourceType: 'Observation',
         status: 'final',
         subject: { reference: `Patient/${patient.id}` },

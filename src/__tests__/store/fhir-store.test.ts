@@ -1,5 +1,5 @@
-/**
- * FhirStore Integration Tests â€?12 tests covering full CRUD + History on SQLite.
+ï»¿/**
+ * FhirStore Integration Tests éˆ¥?12 tests covering full CRUD + History on SQLite.
  *
  * Uses real SQLite in-memory database via BetterSqlite3Adapter + generated DDL.
  */
@@ -57,7 +57,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 1. CREATE â€?generates id + versionId + lastUpdated
+  // 1. CREATE éˆ¥?generates id + versionId + lastUpdated
   // =========================================================================
   it('createResource generates id, versionId, and lastUpdated', async () => {
     const result = await store.createResource('Patient', {
@@ -73,7 +73,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 2. CREATE â€?uses assignedId
+  // 2. CREATE éˆ¥?uses assignedId
   // =========================================================================
   it('createResource uses assignedId when provided', async () => {
     const result = await store.createResource('Patient', {
@@ -84,7 +84,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 3. CREATE â€?stores in main + history tables
+  // 3. CREATE éˆ¥?stores in main + history tables
   // =========================================================================
   it('createResource writes to both main and history tables', async () => {
     const result = await store.createResource('Patient', {
@@ -106,7 +106,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 4. READ â€?returns persisted resource
+  // 4. READ éˆ¥?returns persisted resource
   // =========================================================================
   it('readResource returns the persisted resource', async () => {
     const created = await store.createResource('Patient', {
@@ -121,7 +121,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 5. READ â€?throws ResourceNotFoundError for missing resource
+  // 5. READ éˆ¥?throws ResourceNotFoundError for missing resource
   // =========================================================================
   it('readResource throws ResourceNotFoundError for nonexistent id', async () => {
     await expect(
@@ -130,7 +130,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 6. READ â€?throws ResourceGoneError for deleted resource
+  // 6. READ éˆ¥?throws ResourceGoneError for deleted resource
   // =========================================================================
   it('readResource throws ResourceGoneError for deleted resource', async () => {
     const created = await store.createResource('Patient', {
@@ -144,7 +144,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 7. UPDATE â€?generates new versionId, old version in history
+  // 7. UPDATE éˆ¥?generates new versionId, old version in history
   // =========================================================================
   it('updateResource generates new versionId and preserves old in history', async () => {
     const created = await store.createResource('Patient', {
@@ -152,7 +152,7 @@ describe('FhirStore (SQLite integration)', () => {
       name: [{ family: 'Smith' }],
     });
 
-    const updated = await store.updateResource('Patient', {
+    const { resource: updated } = await store.updateResource('Patient', {
       resourceType: 'Patient',
       id: created.id,
       name: [{ family: 'Jones' }],
@@ -172,14 +172,14 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 8. UPDATE â€?ifMatch optimistic locking succeeds
+  // 8. UPDATE éˆ¥?ifMatch optimistic locking succeeds
   // =========================================================================
   it('updateResource succeeds when ifMatch matches current versionId', async () => {
     const created = await store.createResource('Patient', {
       resourceType: 'Patient',
     });
 
-    const updated = await store.updateResource('Patient', {
+    const { resource: updated } = await store.updateResource('Patient', {
       resourceType: 'Patient',
       id: created.id,
     }, { ifMatch: created.meta.versionId });
@@ -188,7 +188,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 9. UPDATE â€?ifMatch optimistic locking fails
+  // 9. UPDATE éˆ¥?ifMatch optimistic locking fails
   // =========================================================================
   it('updateResource throws ResourceVersionConflictError on ifMatch mismatch', async () => {
     const created = await store.createResource('Patient', {
@@ -204,7 +204,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 10. DELETE â€?soft delete, content preserved in main table
+  // 10. DELETE éˆ¥?soft delete, content preserved in main table
   // =========================================================================
   it('deleteResource performs soft delete with content preserved', async () => {
     const created = await store.createResource('Patient', {
@@ -225,7 +225,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 11. DELETE â€?creates history entry with deleted=1
+  // 11. DELETE éˆ¥?creates history entry with deleted=1
   // =========================================================================
   it('deleteResource creates a history entry with deleted=1', async () => {
     const created = await store.createResource('Patient', {
@@ -244,7 +244,7 @@ describe('FhirStore (SQLite integration)', () => {
   });
 
   // =========================================================================
-  // 12. HISTORY â€?returns entries ordered by versionSeq DESC
+  // 12. HISTORY éˆ¥?returns entries ordered by versionSeq DESC
   // =========================================================================
   it('readHistory returns versions in newest-first order', async () => {
     const created = await store.createResource('Patient', {

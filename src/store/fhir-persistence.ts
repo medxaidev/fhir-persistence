@@ -34,6 +34,7 @@ import {
   ResourceNotFoundError,
   ResourceGoneError,
   ResourceVersionConflictError,
+  PreconditionFailedError,
 } from '../repo/errors.js';
 import {
   buildInsertMainSQLv2,
@@ -42,9 +43,12 @@ import {
   buildSelectByIdSQLv2,
   buildSelectVersionSQLv2,
   buildInstanceHistorySQLv2,
+  buildTypeHistorySQLv2,
 } from '../repo/sql-builder.js';
 import { IndexingPipeline } from '../repo/indexing-pipeline.js';
 import type { IndexingPipelineOptions } from '../repo/indexing-pipeline.js';
+import type { ParsedSearchParam } from '../search/types.js';
+import { buildSearchSQLv2 } from '../search/search-sql-builder.js';
 
 // =============================================================================
 // Section 1: Options
@@ -53,11 +57,29 @@ import type { IndexingPipelineOptions } from '../repo/indexing-pipeline.js';
 export interface CreateResourceOptions {
   /** Pre-assigned ID (used in batch/transaction). */
   assignedId?: string;
+  /** Search condition for conditional create (If-None-Exist). */
+  ifNoneExist?: ParsedSearchParam[];
+}
+
+export interface CreateResourceResult<T = PersistedResource> {
+  /** The persisted resource after the operation. */
+  resource: T;
+  /** True if a new resource was created, false if an existing match was returned. */
+  created: boolean;
 }
 
 export interface UpdateResourceOptions {
   /** Expected versionId for optimistic locking (If-Match header). */
   ifMatch?: string;
+  /** When true, create the resource if it does not exist (PUT-as-Create / upsert). */
+  upsert?: boolean;
+}
+
+export interface UpdateResourceResult<T = PersistedResource> {
+  /** The persisted resource after the operation. */
+  resource: T;
+  /** True if the resource was newly created (upsert), false if updated. */
+  created: boolean;
 }
 
 export interface HistoryOptions {
@@ -111,7 +133,28 @@ export class FhirPersistence {
     resourceType: string,
     resource: T,
     options?: CreateResourceOptions,
-  ): Promise<T & PersistedResource> {
+  ): Promise<CreateResourceResult<T & PersistedResource>> {
+    // PERS-02: Conditional Create (If-None-Exist)
+    if (options?.ifNoneExist && options.ifNoneExist.length > 0) {
+      const searchSQL = buildSearchSQLv2(
+        { resourceType, params: options.ifNoneExist, count: 2 },
+        this.registry,
+      );
+      const matches = await this.adapter.query<{ id: string; content: string }>(
+        searchSQL.sql, searchSQL.values,
+      );
+      if (matches.length > 1) {
+        throw new PreconditionFailedError(resourceType, matches.length);
+      }
+      if (matches.length === 1) {
+        return {
+          resource: JSON.parse(matches[0].content) as T & PersistedResource,
+          created: false,
+        };
+      }
+      // 0 matches → fall through to normal create
+    }
+
     const now = new Date().toISOString();
     const id = options?.assignedId ?? resource.id ?? randomUUID();
     const versionId = randomUUID();
@@ -163,7 +206,7 @@ export class FhirPersistence {
       await tx.execute(histSQL.sql, histSQL.values);
     });
 
-    return persisted;
+    return { resource: persisted, created: true };
   }
 
   // ---------------------------------------------------------------------------
@@ -198,7 +241,7 @@ export class FhirPersistence {
     resourceType: string,
     resource: T,
     options?: UpdateResourceOptions,
-  ): Promise<T & PersistedResource> {
+  ): Promise<UpdateResourceResult<T & PersistedResource>> {
     const id = resource.id;
     if (!id) {
       throw new Error('Resource must have an id for update');
@@ -214,9 +257,40 @@ export class FhirPersistence {
     }>(selectSQL, [id]);
 
     if (!current) {
+      // PERS-01: PUT-as-Create (upsert)
+      if (options?.upsert) {
+        const result = await this.createResource(resourceType, resource, { assignedId: id });
+        return { resource: result.resource, created: true };
+      }
       throw new ResourceNotFoundError(resourceType, id);
     }
     if (current.deleted === 1) {
+      // PERS-01: upsert on deleted resource
+      if (options?.upsert) {
+        const now = new Date().toISOString();
+        const versionId = randomUUID();
+        const persisted = {
+          ...resource, resourceType, id,
+          meta: { ...resource.meta, versionId, lastUpdated: now },
+        } as T & PersistedResource;
+        const impls = this.getImpls(resourceType);
+        const indexResult = await this.pipeline.indexResource(resourceType, persisted, impls);
+        const content = JSON.stringify(persisted);
+        const mainRow: Record<string, unknown> = {
+          id, versionId, content, lastUpdated: now, deleted: 0,
+          _source: persisted.meta?.source ?? null,
+          _profile: persisted.meta?.profile ? JSON.stringify(persisted.meta.profile) : null,
+          ...indexResult.searchColumns,
+        };
+        const historyRow: HistoryRowV2 = { id, versionId, content, lastUpdated: now, deleted: 0 };
+        await this.adapter.transaction(async (tx) => {
+          const updateSQL = buildUpdateMainSQLv2(resourceType, mainRow);
+          await tx.execute(updateSQL.sql, updateSQL.values);
+          const histSQL = buildInsertHistorySQLv2(`${resourceType}_History`, historyRow);
+          await tx.execute(histSQL.sql, histSQL.values);
+        });
+        return { resource: persisted, created: true };
+      }
       throw new ResourceGoneError(resourceType, id);
     }
 
@@ -280,7 +354,7 @@ export class FhirPersistence {
       await tx.execute(histSQL.sql, histSQL.values);
     });
 
-    return persisted;
+    return { resource: persisted, created: false };
   }
 
   // ---------------------------------------------------------------------------
@@ -368,6 +442,37 @@ export class FhirPersistence {
     const { sql, values } = buildInstanceHistorySQLv2(
       `${resourceType}_History`,
       id,
+      options,
+    );
+
+    const rows = await this.adapter.query<{
+      id: string;
+      versionId: string;
+      lastUpdated: string;
+      content: string;
+      deleted: number;
+    }>(sql, values);
+
+    return rows.map((row) => ({
+      id: row.id,
+      versionId: row.versionId,
+      lastUpdated: row.lastUpdated,
+      deleted: row.deleted === 1,
+      resourceType,
+      resource: row.deleted === 1 ? null : (JSON.parse(row.content) as PersistedResource),
+    }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // TYPE-LEVEL HISTORY (PERS-06)
+  // ---------------------------------------------------------------------------
+
+  async readTypeHistory(
+    resourceType: string,
+    options?: HistoryOptions,
+  ): Promise<HistoryEntry[]> {
+    const { sql, values } = buildTypeHistorySQLv2(
+      `${resourceType}_History`,
       options,
     );
 

@@ -5,7 +5,7 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 [![npm version](https://img.shields.io/npm/v/fhir-persistence)](https://www.npmjs.com/package/fhir-persistence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-> **v0.9.0** — Token search fix: FHIR-correct code-only / empty-system matching (`|code`, `code`)
+> **v0.10.0** — PUT-as-Create (upsert), Conditional Create, Type-Level History, HumanName `:exact` fix
 
 ## Features
 
@@ -22,9 +22,12 @@ Embedded FHIR R4 persistence layer — CRUD, search, indexing, and schema migrat
 - **IG-driven schema** — StructureDefinition + SearchParameter → DDL (SQLite + PostgreSQL dialects)
 - **Migration engine** — SchemaDiff → MigrationGenerator → MigrationRunnerV2
 - **Full-text search** — SQLite FTS5 + PostgreSQL tsvector/GIN for string search parameters
+- **PUT-as-Create (upsert)** — `updateResource({ upsert: true })` creates resource if not found
+- **Conditional Create** — `createResource({ ifNoneExist })` with FHIR R4 conditional semantics
 - **Conditional operations** — conditionalCreate / conditionalUpdate / conditionalDelete via `ConditionalService`
+- **Type-level history** — `readTypeHistory('Patient')` for `GET /Patient/_history`
 - **Reindex progress** — `onProgress` callback for CLI and UI progress reporting
-- **Bundle processing** — transaction and batch bundle support
+- **Bundle processing** — transaction and batch bundle support with PUT-as-Create
 - **Terminology** — TerminologyCodeRepo + ValueSetRepo
 - **FhirSystem orchestrator** — end-to-end startup flow for `fhir-engine` integration
 - **Provider bridges** — `FhirDefinitionBridge` + `FhirRuntimeProvider` for `fhir-definition` / `fhir-runtime`
@@ -69,7 +72,7 @@ const persistence = new FhirPersistence({
 });
 
 // 4. CRUD with automatic indexing
-const patient = await persistence.createResource("Patient", {
+const { resource: patient } = await persistence.createResource("Patient", {
   resourceType: "Patient",
   name: [{ family: "Smith", given: ["John"] }],
   birthDate: "1990-01-15",
@@ -132,7 +135,7 @@ const { persistence, sdRegistry, spRegistry, igResult } =
   await system.initialize(definitionBridge);
 
 // 5. Use persistence
-const patient = await persistence.createResource('Patient', { resourceType: 'Patient', ... });
+const { resource: patient } = await persistence.createResource('Patient', { resourceType: 'Patient', ... });
 ```
 
 ## Architecture

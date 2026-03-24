@@ -554,13 +554,14 @@ async function processBatchEntry(
         return errorResponse('400', 'PUT requires resource and ID');
       }
       const toUpdate = { ...entry.resource, id } as FhirResource;
-      const updated = await store.updateResource(resourceType, toUpdate);
+      const updateResult = await store.updateResource(resourceType, toUpdate, { upsert: true });
+      const updated = updateResult.resource;
       const versionId = updated.meta?.versionId ?? '';
       const lastUpdated = updated.meta?.lastUpdated ?? '';
       return {
         resource: updated,
         response: {
-          status: '200',
+          status: updateResult.created ? '201' : '200',
           location: `${resourceType}/${id}/_history/${versionId}`,
           etag: `W/"${versionId}"`,
           lastModified: lastUpdated,

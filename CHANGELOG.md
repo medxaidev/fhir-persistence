@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2025-03-24
+
+### Added
+
+#### PERS-01: PUT-as-Create (Upsert)
+
+- **`FhirStore.updateResource`** and **`FhirPersistence.updateResource`** — new `upsert` option; when `true` and resource does not exist, creates it instead of throwing `ResourceNotFoundError`
+- Return type changed to `UpdateResourceResult<T>` with `{ resource, created }` — `created: true` for upsert-created resources, `false` for normal updates
+- **`FhirPersistence.createResource`** — return type changed to `CreateResourceResult<T>` with `{ resource, created }` for consistency
+
+#### PERS-02: Conditional Create (ifNoneExist)
+
+- **`FhirPersistence.createResource`** — new `ifNoneExist` option accepting `ParsedSearchParam[]`; searches first, returns existing resource if exactly one match, throws `PreconditionFailedError` if multiple matches, creates new resource if no matches
+
+#### PERS-06: Type-Level History
+
+- **`FhirStore.readTypeHistory`** and **`FhirPersistence.readTypeHistory`** — new method for `GET /<ResourceType>/_history` queries with `_since`, `_count`, and cursor pagination support
+
+#### Exports
+
+- **`ConditionalService`** + types (`ConditionalCreateResult`, `ConditionalUpdateResult`, `ConditionalDeleteResult`) now exported from package entry point
+- **`processTransactionV2`**, **`processBatchV2`** + bundle types (`Bundle`, `BundleEntry`, `BundleResponse`, `BundleResponseEntry`) now exported
+- **`buildUrnMap`**, **`deepResolveUrns`** + `UrnTarget` type now exported
+- **`FhirStore`** option/result types (`StoreUpdateResourceResult`, `StoreUpdateResourceOptions`) now exported
+- **`FhirPersistence`** option/result types (`PersistenceCreateResourceOptions`, `CreateResourceResult`, `PersistenceUpdateResourceOptions`, `UpdateResourceResult`) now exported
+
+### Fixed
+
+#### PERS-07: String `:exact` Search Modifier on HumanName
+
+- **`where-builder.ts`** — `name:exact` search now matches against individual `family` and `given` columns in the HumanName lookup table instead of the concatenated `name` column
+- Previously `name:exact=Smith` would fail to match because the `name` column contains `"Smith John"` (concatenated); now correctly matches if `family = "Smith"` OR `given = "Smith"`
+- Fix applied to both v1 (PostgreSQL `$N`) and v2 (SQLite `?`) WHERE builders
+
+#### Bundle Processor PUT Compatibility
+
+- **`bundle-processor.ts`** — `processBatchEntry` PUT handler updated to extract `.resource` from `UpdateResourceResult` and use `upsert: true` for PUT-as-Create semantics; response status now correctly returns `201` for created resources
+
+### Changed
+
+- **`FhirStore.updateResource`** — return type changed from `T & PersistedResource` to `UpdateResourceResult<T>` (breaking change for direct callers)
+- **`FhirPersistence.createResource`** — return type changed from `T & PersistedResource` to `CreateResourceResult<T>` (breaking change for direct callers)
+- **`FhirPersistence.updateResource`** — return type changed from `T & PersistedResource` to `UpdateResourceResult<T>` (breaking change for direct callers)
+
+### Test Coverage
+
+- **1057 passing tests**, 8 skipped, across 63 test files — no regressions
+- All existing tests updated for new `UpdateResourceResult` / `CreateResourceResult` return types
+- PERS-07 test assertions updated to verify per-component HumanName matching
+
 ## [0.9.0] - 2025-03-20
 
 ### Fixed

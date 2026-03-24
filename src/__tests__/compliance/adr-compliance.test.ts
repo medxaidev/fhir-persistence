@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ADR Compliance Tests
  *
  * Verifies that the Stage 1-9 implementation adheres to the
@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-// ─── v2 modules ──────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€ v2 modules 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 import { BetterSqlite3Adapter } from '../../db/better-sqlite3-adapter.js';
 import { SQLiteDialect } from '../../db/sqlite-dialect.js';
 import { PostgresDialect } from '../../db/postgres-dialect.js';
@@ -436,7 +436,7 @@ describe('ADR-07: Persistence CRUD', () => {
     const created = await store.createResource('Patient', {
       resourceType: 'Patient',
     } as any);
-    const updated = await store.updateResource('Patient', {
+    const { resource: updated } = await store.updateResource('Patient', {
       resourceType: 'Patient', id: created.id, name: [{ family: 'Jones' }],
     } as any);
     expect(updated.meta.versionId).not.toBe(created.meta.versionId);
@@ -629,7 +629,7 @@ describe('ADR-11: Reference Resolver', () => {
 
   it('References INSERT has 5 columns per row', () => {
     const sql = buildInsertReferencesSQLv2('Observation_References', 3);
-    // 3 rows × 5 params = 15 placeholders
+    // 3 rows 脳 5 params = 15 placeholders
     const qCount = (sql.match(/\?/g) || []).length;
     expect(qCount).toBe(15);
   });

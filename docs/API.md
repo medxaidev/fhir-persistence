@@ -1,6 +1,6 @@
 # fhir-persistence — API Reference
 
-Version: 0.9.0
+Version: 0.10.0
 
 ---
 
@@ -26,14 +26,17 @@ const persistence = new FhirPersistence(options: FhirPersistenceOptions);
 
 **Methods:**
 
-| Method                           | Returns                            | Description               |
-| -------------------------------- | ---------------------------------- | ------------------------- |
-| `createResource(type, resource)` | `Promise<PersistedResource>`       | Create with auto-indexing |
-| `readResource(type, id)`         | `Promise<PersistedResource>`       | Read by ID                |
-| `updateResource(type, resource)` | `Promise<PersistedResource>`       | Update with re-indexing   |
-| `deleteResource(type, id)`       | `Promise<void>`                    | Soft delete               |
-| `searchResources(request)`       | `Promise<SearchResult>`            | Search with pagination    |
-| `searchStream(request)`          | `AsyncIterable<PersistedResource>` | Streaming search results  |
+| Method                                     | Returns                            | Description                                      |
+| ------------------------------------------ | ---------------------------------- | ------------------------------------------------ |
+| `createResource(type, resource, options?)` | `Promise<CreateResourceResult>`    | Create with auto-indexing (`ifNoneExist` option) |
+| `readResource(type, id)`                   | `Promise<PersistedResource>`       | Read by ID                                       |
+| `updateResource(type, resource, options?)` | `Promise<UpdateResourceResult>`    | Update with re-indexing (`upsert`, `ifMatch`)    |
+| `deleteResource(type, id)`                 | `Promise<void>`                    | Soft delete                                      |
+| `readHistory(type, id, options?)`          | `Promise<HistoryEntry[]>`          | Instance history (newest first)                  |
+| `readTypeHistory(type, options?)`          | `Promise<HistoryEntry[]>`          | Type-level history (`GET /Type/_history`)        |
+| `readVersion(type, id, versionId)`         | `Promise<PersistedResource>`       | Read specific version (vread)                    |
+| `searchResources(request)`                 | `Promise<SearchResult>`            | Search with pagination                           |
+| `searchStream(request)`                    | `AsyncIterable<PersistedResource>` | Streaming search results                         |
 
 ---
 
@@ -49,14 +52,15 @@ const store = new FhirStore(adapter: StorageAdapter);
 
 **Methods:**
 
-| Method                                     | Returns                      | Description                                             |
-| ------------------------------------------ | ---------------------------- | ------------------------------------------------------- |
-| `createResource(type, resource, options?)` | `Promise<PersistedResource>` | Insert resource                                         |
-| `readResource(type, id)`                   | `Promise<PersistedResource>` | Read by ID                                              |
-| `updateResource(type, resource, options?)` | `Promise<PersistedResource>` | Update resource (supports `ifMatch` optimistic locking) |
-| `deleteResource(type, id)`                 | `Promise<void>`              | Soft delete (content preserved)                         |
-| `readHistory(type, id, options?)`          | `Promise<HistoryEntry[]>`    | Instance history (newest first)                         |
-| `readVersion(type, id, versionId)`         | `Promise<PersistedResource>` | Read specific version (vread)                           |
+| Method                                     | Returns                         | Description                                   |
+| ------------------------------------------ | ------------------------------- | --------------------------------------------- |
+| `createResource(type, resource, options?)` | `Promise<PersistedResource>`    | Insert resource (`assignedId` option)         |
+| `readResource(type, id)`                   | `Promise<PersistedResource>`    | Read by ID                                    |
+| `updateResource(type, resource, options?)` | `Promise<UpdateResourceResult>` | Update resource (`ifMatch`, `upsert` options) |
+| `deleteResource(type, id)`                 | `Promise<void>`                 | Soft delete (content preserved)               |
+| `readHistory(type, id, options?)`          | `Promise<HistoryEntry[]>`       | Instance history (newest first)               |
+| `readTypeHistory(type, options?)`          | `Promise<HistoryEntry[]>`       | Type-level history (`GET /Type/_history`)     |
+| `readVersion(type, id, versionId)`         | `Promise<PersistedResource>`    | Read specific version (vread)                 |
 
 ---
 

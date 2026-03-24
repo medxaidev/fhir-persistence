@@ -1,4 +1,4 @@
-/**
+﻿/**
  * FhirPersistence v2 Tests
  *
  * End-to-end facade: CRUD with automatic indexing, search columns,
@@ -24,13 +24,13 @@ function createRegistry(): SearchParameterRegistry {
   reg.indexBundle({
     resourceType: 'Bundle',
     entry: [
-      // 'birthdate' → column strategy (date, expression=Patient.birthDate)
+      // 'birthdate' 鈫?column strategy (date, expression=Patient.birthDate)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Patient-birthdate', name: 'birthdate', code: 'birthdate', base: ['Patient'], type: 'date' as const, expression: 'Patient.birthDate' } },
-      // 'active' → token-column strategy (token, expression=Patient.active)
+      // 'active' 鈫?token-column strategy (token, expression=Patient.active)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Patient-active', name: 'active', code: 'active', base: ['Patient'], type: 'token' as const, expression: 'Patient.active' } },
-      // 'subject' → column strategy (reference)
+      // 'subject' 鈫?column strategy (reference)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Observation-subject', name: 'subject', code: 'subject', base: ['Observation'], type: 'reference' as const, expression: 'Observation.subject', target: ['Patient'] } },
-      // 'status' → token-column strategy (token)
+      // 'status' 鈫?token-column strategy (token)
       { resource: { resourceType: 'SearchParameter' as const, url: 'http://hl7.org/fhir/SearchParameter/Observation-status', name: 'status', code: 'status', base: ['Observation'], type: 'token' as const, expression: 'Observation.status' } },
     ],
   });
@@ -148,7 +148,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('createResource persists resource and populates search columns', async () => {
-    const result = await persistence.createResource('Patient', {
+    const { resource: result } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
       birthDate: '1990-01-15',
       active: true,
@@ -167,11 +167,11 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   });
 
   it('createResource writes references for Observation.subject', async () => {
-    const patient = await persistence.createResource('Patient', {
+    const { resource: patient } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
     } as any);
 
-    const obs = await persistence.createResource('Observation', {
+    const { resource: obs } = await persistence.createResource('Observation', {
       resourceType: 'Observation',
       subject: { reference: `Patient/${patient.id}` },
       status: 'final',
@@ -193,7 +193,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('readResource returns the created resource', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
       active: true,
     } as any);
@@ -213,12 +213,12 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('updateResource changes versionId and re-indexes search columns', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
       birthDate: '1980-01-01',
     } as any);
 
-    const updated = await persistence.updateResource('Patient', {
+    const { resource: updated } = await persistence.updateResource('Patient', {
       resourceType: 'Patient',
       id: created.id,
       birthDate: '2000-12-25',
@@ -235,10 +235,10 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   });
 
   it('updateResource re-writes references', async () => {
-    const pat1 = await persistence.createResource('Patient', { resourceType: 'Patient' } as any);
-    const pat2 = await persistence.createResource('Patient', { resourceType: 'Patient' } as any);
+    const { resource: pat1 } = await persistence.createResource('Patient', { resourceType: 'Patient' } as any);
+    const { resource: pat2 } = await persistence.createResource('Patient', { resourceType: 'Patient' } as any);
 
-    const obs = await persistence.createResource('Observation', {
+    const { resource: obs } = await persistence.createResource('Observation', {
       resourceType: 'Observation',
       subject: { reference: `Patient/${pat1.id}` },
     } as any);
@@ -259,7 +259,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   });
 
   it('updateResource with ifMatch enforces optimistic locking', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
     } as any);
 
@@ -275,8 +275,8 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('deleteResource soft-deletes and clears references', async () => {
-    const pat = await persistence.createResource('Patient', { resourceType: 'Patient' } as any);
-    const obs = await persistence.createResource('Observation', {
+    const { resource: pat } = await persistence.createResource('Patient', { resourceType: 'Patient' } as any);
+    const { resource: obs } = await persistence.createResource('Observation', {
       resourceType: 'Observation',
       subject: { reference: `Patient/${pat.id}` },
     } as any);
@@ -296,7 +296,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   });
 
   it('deleteResource preserves content (ADR-08)', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
       active: true,
     } as any);
@@ -316,7 +316,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('readHistory returns all versions', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient', birthDate: '1990-01-01',
     } as any);
 
@@ -333,7 +333,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('readVersion returns specific historical version', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient', birthDate: '1970-01-01',
     } as any);
     const v1Id = created.meta.versionId;
@@ -352,7 +352,7 @@ describe('FhirPersistence v2 (end-to-end)', () => {
   // ---------------------------------------------------------------------------
 
   it('reindexResource updates search columns without new version', async () => {
-    const created = await persistence.createResource('Patient', {
+    const { resource: created } = await persistence.createResource('Patient', {
       resourceType: 'Patient',
       birthDate: '1970-01-01',
     } as any);

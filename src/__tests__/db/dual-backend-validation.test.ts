@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Dual-Backend Validation Test Suite
  *
  * Comprehensive validation of SQLite and PostgreSQL backends covering:
- *   1. Schema DDL correctness — generate and execute DDL on both backends
- *   2. IG lifecycle — initial install → add new IG → upgrade migration
- *   3. CRUD correctness — create, read, update, delete, history, vread
+ *   1. Schema DDL correctness 鈥?generate and execute DDL on both backends
+ *   2. IG lifecycle 鈥?initial install 鈫?add new IG 鈫?upgrade migration
+ *   3. CRUD correctness 鈥?create, read, update, delete, history, vread
  *
  * SQLite: in-memory via BetterSqlite3Adapter
  * PostgreSQL: localhost:5433 (medxai_dev, postgres/assert)
@@ -43,7 +43,7 @@ const PG_CONFIG = {
   password: 'assert',
 };
 
-// Unique resource type name per run — ensures constraint/index names are unique in PG
+// Unique resource type name per run 鈥?ensures constraint/index names are unique in PG
 const RUN_ID = Date.now().toString(36);
 const PG_RT = `Pt${RUN_ID}`;
 
@@ -124,7 +124,7 @@ describe('Dual-Backend Validation', () => {
   // ===========================================================================
 
   describe('1. Schema DDL Correctness', () => {
-    it('generates DDL for SQLite dialect — contains INTEGER, TEXT, AUTOINCREMENT', () => {
+    it('generates DDL for SQLite dialect 鈥?contains INTEGER, TEXT, AUTOINCREMENT', () => {
       const ts = buildTableSet();
       const mainDDL = generateCreateMainTable(ts.main, 'sqlite');
       const histDDL = generateCreateHistoryTable(ts.history, 'sqlite');
@@ -138,7 +138,7 @@ describe('Dual-Backend Validation', () => {
       expect(refsDDL).toContain('"resourceId" TEXT NOT NULL');
     });
 
-    it('generates DDL for PostgreSQL dialect — contains IDENTITY, no AUTOINCREMENT', () => {
+    it('generates DDL for PostgreSQL dialect 鈥?contains IDENTITY, no AUTOINCREMENT', () => {
       const ts = buildTableSet();
       const mainDDL = generateCreateMainTable(ts.main, 'postgres');
       const histDDL = generateCreateHistoryTable(ts.history, 'postgres');
@@ -227,7 +227,7 @@ describe('Dual-Backend Validation', () => {
   });
 
   // ===========================================================================
-  // Part 2: IG lifecycle — install, add SP, upgrade
+  // Part 2: IG lifecycle 鈥?install, add SP, upgrade
   // ===========================================================================
 
   describe('2. IG Lifecycle (schema diff + migration)', () => {
@@ -346,7 +346,7 @@ describe('Dual-Backend Validation', () => {
       store = new FhirStore(sqliteAdapter);
     });
 
-    it('createResource — generates id, versionId, lastUpdated', async () => {
+    it('createResource 鈥?generates id, versionId, lastUpdated', async () => {
       const result = await store.createResource('Patient', {
         resourceType: 'Patient',
         name: [{ family: 'TestSqlite' }],
@@ -356,7 +356,7 @@ describe('Dual-Backend Validation', () => {
       expect(result.meta.lastUpdated).toBeTruthy();
     });
 
-    it('readResource — returns correct data', async () => {
+    it('readResource 鈥?returns correct data', async () => {
       const created = await store.createResource('Patient', {
         resourceType: 'Patient',
         name: [{ family: 'ReadTest' }],
@@ -366,16 +366,16 @@ describe('Dual-Backend Validation', () => {
       expect((read as any).name[0].family).toBe('ReadTest');
     });
 
-    it('readResource — throws ResourceNotFoundError for missing', async () => {
+    it('readResource 鈥?throws ResourceNotFoundError for missing', async () => {
       await expect(store.readResource('Patient', 'nonexistent-id'))
         .rejects.toThrow(ResourceNotFoundError);
     });
 
-    it('updateResource — changes versionId, preserves id', async () => {
+    it('updateResource 鈥?changes versionId, preserves id', async () => {
       const created = await store.createResource('Patient', {
         resourceType: 'Patient', gender: 'male',
       } as any);
-      const updated = await store.updateResource('Patient', {
+      const { resource: updated } = await store.updateResource('Patient', {
         resourceType: 'Patient', id: created.id, gender: 'female',
       } as any);
       expect(updated.id).toBe(created.id);
@@ -383,16 +383,16 @@ describe('Dual-Backend Validation', () => {
       expect((updated as any).gender).toBe('female');
     });
 
-    it('updateResource — ifMatch enforces optimistic locking', async () => {
+    it('updateResource 鈥?ifMatch enforces optimistic locking', async () => {
       const created = await store.createResource('Patient', { resourceType: 'Patient' } as any);
       await expect(
         store.updateResource('Patient', { resourceType: 'Patient', id: created.id } as any, { ifMatch: 'wrong-version' }),
       ).rejects.toThrow(ResourceVersionConflictError);
     });
 
-    it('updateResource — ifMatch succeeds with correct version', async () => {
+    it('updateResource 鈥?ifMatch succeeds with correct version', async () => {
       const created = await store.createResource('Patient', { resourceType: 'Patient' } as any);
-      const updated = await store.updateResource(
+      const { resource: updated } = await store.updateResource(
         'Patient',
         { resourceType: 'Patient', id: created.id, gender: 'other' } as any,
         { ifMatch: created.meta.versionId },
@@ -400,7 +400,7 @@ describe('Dual-Backend Validation', () => {
       expect(updated.meta.versionId).not.toBe(created.meta.versionId);
     });
 
-    it('deleteResource — soft delete, content preserved', async () => {
+    it('deleteResource 鈥?soft delete, content preserved', async () => {
       const created = await store.createResource('Patient', {
         resourceType: 'Patient', name: [{ family: 'ToDelete' }],
       } as any);
@@ -412,13 +412,13 @@ describe('Dual-Backend Validation', () => {
       expect(row!.content).toContain('ToDelete');
     });
 
-    it('readResource — throws ResourceGoneError for deleted', async () => {
+    it('readResource 鈥?throws ResourceGoneError for deleted', async () => {
       const created = await store.createResource('Patient', { resourceType: 'Patient' } as any);
       await store.deleteResource('Patient', created.id);
       await expect(store.readResource('Patient', created.id)).rejects.toThrow(ResourceGoneError);
     });
 
-    it('readHistory — returns versions newest first', async () => {
+    it('readHistory 鈥?returns versions newest first', async () => {
       const created = await store.createResource('Patient', { resourceType: 'Patient', gender: 'male' } as any);
       await store.updateResource('Patient', { resourceType: 'Patient', id: created.id, gender: 'female' } as any);
       const history = await store.readHistory('Patient', created.id);
@@ -426,7 +426,7 @@ describe('Dual-Backend Validation', () => {
       expect(history[0].versionId).not.toBe(created.meta.versionId);
     });
 
-    it('readVersion (vread) — returns specific version', async () => {
+    it('readVersion (vread) 鈥?returns specific version', async () => {
       const created = await store.createResource('Patient', { resourceType: 'Patient', gender: 'male' } as any);
       const v1Id = created.meta.versionId;
       await store.updateResource('Patient', { resourceType: 'Patient', id: created.id, gender: 'female' } as any);
@@ -434,13 +434,13 @@ describe('Dual-Backend Validation', () => {
       expect((v1 as any).gender).toBe('male');
     });
 
-    it('double delete — throws ResourceGoneError', async () => {
+    it('double delete 鈥?throws ResourceGoneError', async () => {
       const created = await store.createResource('Patient', { resourceType: 'Patient' } as any);
       await store.deleteResource('Patient', created.id);
       await expect(store.deleteResource('Patient', created.id)).rejects.toThrow(ResourceGoneError);
     });
 
-    it('update on non-existent — throws ResourceNotFoundError', async () => {
+    it('update on non-existent 鈥?throws ResourceNotFoundError', async () => {
       await expect(
         store.updateResource('Patient', { resourceType: 'Patient', id: 'no-such-id' } as any),
       ).rejects.toThrow(ResourceNotFoundError);
@@ -455,7 +455,7 @@ describe('Dual-Backend Validation', () => {
       store = new FhirStore(pgAdapter);
     });
 
-    it('createResource — generates id, versionId, lastUpdated', async () => {
+    it('createResource 鈥?generates id, versionId, lastUpdated', async () => {
       const result = await store.createResource(PG_RT, {
         resourceType: 'Patient', name: [{ family: 'TestPg' }],
       } as any);
@@ -464,7 +464,7 @@ describe('Dual-Backend Validation', () => {
       expect(result.meta.lastUpdated).toBeTruthy();
     });
 
-    it('readResource — returns correct data', async () => {
+    it('readResource 鈥?returns correct data', async () => {
       const created = await store.createResource(PG_RT, {
         resourceType: 'Patient', name: [{ family: 'PgRead' }],
       } as any);
@@ -473,29 +473,29 @@ describe('Dual-Backend Validation', () => {
       expect((read as any).name[0].family).toBe('PgRead');
     });
 
-    it('readResource — throws ResourceNotFoundError for missing', async () => {
+    it('readResource 鈥?throws ResourceNotFoundError for missing', async () => {
       await expect(store.readResource(PG_RT, 'nonexistent-id'))
         .rejects.toThrow(ResourceNotFoundError);
     });
 
-    it('updateResource — changes versionId, preserves id', async () => {
+    it('updateResource 鈥?changes versionId, preserves id', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient', gender: 'male' } as any);
-      const updated = await store.updateResource(PG_RT, { resourceType: 'Patient', id: created.id, gender: 'female' } as any);
+      const { resource: updated } = await store.updateResource(PG_RT, { resourceType: 'Patient', id: created.id, gender: 'female' } as any);
       expect(updated.id).toBe(created.id);
       expect(updated.meta.versionId).not.toBe(created.meta.versionId);
       expect((updated as any).gender).toBe('female');
     });
 
-    it('updateResource — ifMatch enforces optimistic locking', async () => {
+    it('updateResource 鈥?ifMatch enforces optimistic locking', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient' } as any);
       await expect(
         store.updateResource(PG_RT, { resourceType: 'Patient', id: created.id } as any, { ifMatch: 'wrong' }),
       ).rejects.toThrow(ResourceVersionConflictError);
     });
 
-    it('updateResource — ifMatch succeeds with correct version', async () => {
+    it('updateResource 鈥?ifMatch succeeds with correct version', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient' } as any);
-      const updated = await store.updateResource(
+      const { resource: updated } = await store.updateResource(
         PG_RT,
         { resourceType: 'Patient', id: created.id, gender: 'other' } as any,
         { ifMatch: created.meta.versionId },
@@ -503,7 +503,7 @@ describe('Dual-Backend Validation', () => {
       expect(updated.meta.versionId).not.toBe(created.meta.versionId);
     });
 
-    it('deleteResource — soft delete, content preserved', async () => {
+    it('deleteResource 鈥?soft delete, content preserved', async () => {
       const created = await store.createResource(PG_RT, {
         resourceType: 'Patient', name: [{ family: 'PgDel' }],
       } as any);
@@ -515,13 +515,13 @@ describe('Dual-Backend Validation', () => {
       expect(row!.content).toContain('PgDel');
     });
 
-    it('readResource — throws ResourceGoneError for deleted', async () => {
+    it('readResource 鈥?throws ResourceGoneError for deleted', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient' } as any);
       await store.deleteResource(PG_RT, created.id);
       await expect(store.readResource(PG_RT, created.id)).rejects.toThrow(ResourceGoneError);
     });
 
-    it('readHistory — returns versions newest first', async () => {
+    it('readHistory 鈥?returns versions newest first', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient', gender: 'male' } as any);
       await store.updateResource(PG_RT, { resourceType: 'Patient', id: created.id, gender: 'female' } as any);
       const history = await store.readHistory(PG_RT, created.id);
@@ -529,7 +529,7 @@ describe('Dual-Backend Validation', () => {
       expect(history[0].versionId).not.toBe(created.meta.versionId);
     });
 
-    it('readVersion (vread) — returns specific version', async () => {
+    it('readVersion (vread) 鈥?returns specific version', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient', gender: 'male' } as any);
       const v1Id = created.meta.versionId;
       await store.updateResource(PG_RT, { resourceType: 'Patient', id: created.id, gender: 'female' } as any);
@@ -537,19 +537,19 @@ describe('Dual-Backend Validation', () => {
       expect((v1 as any).gender).toBe('male');
     });
 
-    it('double delete — throws ResourceGoneError', async () => {
+    it('double delete 鈥?throws ResourceGoneError', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient' } as any);
       await store.deleteResource(PG_RT, created.id);
       await expect(store.deleteResource(PG_RT, created.id)).rejects.toThrow(ResourceGoneError);
     });
 
-    it('update on non-existent — throws ResourceNotFoundError', async () => {
+    it('update on non-existent 鈥?throws ResourceNotFoundError', async () => {
       await expect(
         store.updateResource(PG_RT, { resourceType: 'Patient', id: 'no-such-id' } as any),
       ).rejects.toThrow(ResourceNotFoundError);
     });
 
-    it('transaction atomicity — all-or-nothing on PG', async () => {
+    it('transaction atomicity 鈥?all-or-nothing on PG', async () => {
       const created = await store.createResource(PG_RT, { resourceType: 'Patient' } as any);
       const origVersion = created.meta.versionId;
       await expect(

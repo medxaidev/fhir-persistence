@@ -294,6 +294,19 @@ function buildLookupTableFragment(
   const outerIdRef = `"${resourceType}"."id"`;
 
   if (param.modifier === 'exact') {
+    // PERS-07: For HumanName 'name', match against family OR given individually
+    if (table === 'HumanName' && column === 'name') {
+      const colConds: string[] = [];
+      const allVals: unknown[] = [];
+      let idx = startIndex;
+      for (const v of param.values) {
+        colConds.push(`__lookup."family" = $${idx} OR __lookup."given" = $${idx + 1}`);
+        allVals.push(v, v);
+        idx += 2;
+      }
+      const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${colConds.join(' OR ')}))`;
+      return { sql, values: allVals };
+    }
     // Exact: direct equality
     if (param.values.length === 1) {
       const sql = `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND ${colRef} = $${startIndex})`;
@@ -998,6 +1011,16 @@ function buildLookupTableFragmentV2(
   const colRef = `__lookup."${column}"`;
   const outerIdRef = `"${resourceType}"."id"`;
   if (param.modifier === 'exact') {
+    // PERS-07: For HumanName 'name', match against family OR given individually
+    if (table === 'HumanName' && column === 'name') {
+      const colConds: string[] = [];
+      const allVals: unknown[] = [];
+      for (const v of param.values) {
+        colConds.push(`__lookup."family" = ? OR __lookup."given" = ?`);
+        allVals.push(v, v);
+      }
+      return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND (${colConds.join(' OR ')}))`, values: allVals };
+    }
     if (param.values.length === 1) {
       return { sql: `EXISTS (SELECT 1 FROM "${table}" __lookup WHERE __lookup."resourceId" = ${outerIdRef} AND ${colRef} = ?)`, values: [param.values[0]] };
     }

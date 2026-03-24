@@ -1,5 +1,5 @@
-/**
- * WHERE Clause Builder — Unit Tests
+﻿/**
+ * WHERE Clause Builder 鈥?Unit Tests
  */
 
 import { describe, it, expect } from 'vitest';
@@ -46,10 +46,10 @@ describe('prefixToOperator', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — string type
+// buildWhereFragment 鈥?string type
 // =============================================================================
 
-describe('buildWhereFragment — string', () => {
+describe('buildWhereFragment 鈥?string', () => {
   const impl = makeImpl({ code: 'family', type: 'string', columnName: 'family' });
 
   it('default: prefix match with LOWER/LIKE', () => {
@@ -89,10 +89,10 @@ describe('buildWhereFragment — string', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — date type
+// buildWhereFragment 鈥?date type
 // =============================================================================
 
-describe('buildWhereFragment — date', () => {
+describe('buildWhereFragment 鈥?date', () => {
   const impl = makeImpl({ code: 'birthdate', type: 'date', columnName: 'birthdate', columnType: 'TIMESTAMPTZ' });
 
   it('default (eq): equality', () => {
@@ -120,7 +120,7 @@ describe('buildWhereFragment — date', () => {
     expect(result!.sql).toBe('"birthdate" <> $1');
   });
 
-  it('ap prefix: BETWEEN ±1 day', () => {
+  it('ap prefix: BETWEEN 卤1 day', () => {
     const param: ParsedSearchParam = { code: 'birthdate', prefix: 'ap', values: ['2026-01-15T00:00:00.000Z'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result).not.toBeNull();
@@ -140,10 +140,10 @@ describe('buildWhereFragment — date', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — number type
+// buildWhereFragment 鈥?number type
 // =============================================================================
 
-describe('buildWhereFragment — number', () => {
+describe('buildWhereFragment 鈥?number', () => {
   const impl = makeImpl({ code: 'length', type: 'number', columnName: 'length', columnType: 'DOUBLE PRECISION' });
 
   it('default: equality with numeric value', () => {
@@ -160,7 +160,7 @@ describe('buildWhereFragment — number', () => {
     expect(result!.values).toEqual([50]);
   });
 
-  it('ap prefix: BETWEEN ±10%', () => {
+  it('ap prefix: BETWEEN 卤10%', () => {
     const param: ParsedSearchParam = { code: 'length', prefix: 'ap', values: ['100'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result).not.toBeNull();
@@ -183,10 +183,10 @@ describe('buildWhereFragment — number', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — reference type
+// buildWhereFragment 鈥?reference type
 // =============================================================================
 
-describe('buildWhereFragment — reference', () => {
+describe('buildWhereFragment 鈥?reference', () => {
   const impl = makeImpl({ code: 'subject', type: 'reference', columnName: 'subject' });
 
   it('equality match', () => {
@@ -205,10 +205,10 @@ describe('buildWhereFragment — reference', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — uri type
+// buildWhereFragment 鈥?uri type
 // =============================================================================
 
-describe('buildWhereFragment — uri', () => {
+describe('buildWhereFragment 鈥?uri', () => {
   const impl = makeImpl({ code: 'url', type: 'uri', columnName: 'url' });
 
   it('exact match', () => {
@@ -220,10 +220,10 @@ describe('buildWhereFragment — uri', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — token type
+// buildWhereFragment 鈥?token type
 // =============================================================================
 
-describe('buildWhereFragment — token', () => {
+describe('buildWhereFragment 鈥?token', () => {
   const impl = makeImpl({ code: 'gender', type: 'token', columnName: 'gender', strategy: 'token-column' });
 
   it('bare code uses LIKE via unnest to match any system', () => {
@@ -253,20 +253,20 @@ describe('buildWhereFragment — token', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — :missing modifier
+// buildWhereFragment 鈥?:missing modifier
 // =============================================================================
 
-describe('buildWhereFragment — :missing', () => {
+describe('buildWhereFragment 鈥?:missing', () => {
   const impl = makeImpl({ code: 'active', type: 'token', columnName: 'active' });
 
-  it(':missing=true → IS NULL', () => {
+  it(':missing=true 鈫?IS NULL', () => {
     const param: ParsedSearchParam = { code: 'active', modifier: 'missing', values: ['true'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toBe('"active" IS NULL');
     expect(result!.values).toEqual([]);
   });
 
-  it(':missing=false → IS NOT NULL', () => {
+  it(':missing=false 鈫?IS NOT NULL', () => {
     const param: ParsedSearchParam = { code: 'active', modifier: 'missing', values: ['false'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toBe('"active" IS NOT NULL');
@@ -275,10 +275,10 @@ describe('buildWhereFragment — :missing', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — lookup-table strategy
+// buildWhereFragment 鈥?lookup-table strategy
 // =============================================================================
 
-describe('buildWhereFragment — lookup-table', () => {
+describe('buildWhereFragment 鈥?lookup-table', () => {
   it('searches HumanName global table for lookup-table strategy', () => {
     const impl = makeImpl({ code: 'name', type: 'string', columnName: 'name', strategy: 'lookup-table' });
     const param: ParsedSearchParam = { code: 'name', values: ['Smith'] };
@@ -290,10 +290,10 @@ describe('buildWhereFragment — lookup-table', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — parameter index
+// buildWhereFragment 鈥?parameter index
 // =============================================================================
 
-describe('buildWhereFragment — parameter indexing', () => {
+describe('buildWhereFragment 鈥?parameter indexing', () => {
   it('uses startIndex for $N placeholder (token-column bare code)', () => {
     const impl = makeImpl({ code: 'gender', type: 'token', columnName: 'gender', strategy: 'token-column' });
     const param: ParsedSearchParam = { code: 'gender', values: ['male'] };
@@ -312,7 +312,7 @@ describe('buildWhereFragment — parameter indexing', () => {
 });
 
 // =============================================================================
-// buildWhereClause — composite
+// buildWhereClause 鈥?composite
 // =============================================================================
 
 describe('buildWhereClause', () => {
@@ -382,10 +382,10 @@ describe('buildWhereClause', () => {
 });
 
 // =============================================================================
-// buildWhereClause — metadata search parameters
+// buildWhereClause 鈥?metadata search parameters
 // =============================================================================
 
-describe('buildWhereClause — metadata params', () => {
+describe('buildWhereClause 鈥?metadata params', () => {
   const registry = new SearchParameterRegistry();
 
   it('_tag generates token-column array overlap on ___tag', () => {
@@ -484,13 +484,13 @@ describe('buildWhereClause — metadata params', () => {
 });
 
 // =============================================================================
-// buildWhereFragment — token system|code enhancement
+// buildWhereFragment 鈥?token system|code enhancement
 // =============================================================================
 
-describe('buildWhereFragment — token system|code', () => {
+describe('buildWhereFragment 鈥?token system|code', () => {
   const impl = makeImpl({ code: 'identifier', type: 'token', columnName: 'identifier', strategy: 'token-column' });
 
-  it('plain code value → LIKE via unnest to match any system', () => {
+  it('plain code value 鈫?LIKE via unnest to match any system', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['12345'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toContain('EXISTS');
@@ -499,14 +499,14 @@ describe('buildWhereFragment — token system|code', () => {
     expect(result!.values).toEqual(['%|12345']);
   });
 
-  it('system|code value → array overlap as-is', () => {
+  it('system|code value 鈫?array overlap as-is', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['http://example.com|12345'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toBe('"__identifier" && ARRAY[$1]::text[]');
     expect(result!.values).toEqual(['http://example.com|12345']);
   });
 
-  it('system| value → EXISTS + unnest + LIKE', () => {
+  it('system| value 鈫?EXISTS + unnest + LIKE', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['http://example.com|'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toContain('EXISTS');
@@ -515,7 +515,7 @@ describe('buildWhereFragment — token system|code', () => {
     expect(result!.values).toEqual(['http://example.com|%']);
   });
 
-  it('|code value → exact match with |code (empty system)', () => {
+  it('|code value 鈫?exact match with |code (empty system)', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['|12345'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toBe('"__identifier" && ARRAY[$1]::text[]');
@@ -529,14 +529,14 @@ describe('buildWhereFragment — token system|code', () => {
     expect(result!.values).toEqual(['http://example.com|12345']);
   });
 
-  it(':text modifier → LIKE on sort column', () => {
+  it(':text modifier 鈫?LIKE on sort column', () => {
     const param: ParsedSearchParam = { code: 'identifier', modifier: 'text', values: ['body weight'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toBe('LOWER("__identifierSort") LIKE $1');
     expect(result!.values).toEqual(['body weight%']);
   });
 
-  it(':text modifier with multiple values → OR of LIKEs', () => {
+  it(':text modifier with multiple values 鈫?OR of LIKEs', () => {
     const param: ParsedSearchParam = { code: 'identifier', modifier: 'text', values: ['body', 'weight'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toContain('OR');
@@ -545,7 +545,7 @@ describe('buildWhereFragment — token system|code', () => {
     expect(result!.values).toEqual(['body%', 'weight%']);
   });
 
-  it('mixed values (bare code + system|code) → LIKE + exact in OR', () => {
+  it('mixed values (bare code + system|code) 鈫?LIKE + exact in OR', () => {
     const param: ParsedSearchParam = { code: 'identifier', values: ['12345', 'http://example.com|67890'] };
     const result = buildWhereFragment(impl, param, 1);
     expect(result!.sql).toContain('ARRAY[$1]::text[]');
@@ -556,10 +556,10 @@ describe('buildWhereFragment — token system|code', () => {
 });
 
 // =============================================================================
-// Phase 17 — Lookup-table strategy (sort-column search)
+// Phase 17 鈥?Lookup-table strategy (sort-column search)
 // =============================================================================
 
-describe('Phase 17 — lookup-table strategy', () => {
+describe('Phase 17 鈥?lookup-table strategy', () => {
   const nameImpl = makeImpl({
     code: 'name',
     type: 'string',
@@ -592,12 +592,12 @@ describe('Phase 17 — lookup-table strategy', () => {
     expect(result!.values).toEqual(['smith%']);
   });
 
-  it('name :exact generates EXISTS with equality on HumanName table', () => {
+  it('name :exact generates EXISTS with equality on family OR given (PERS-07)', () => {
     const param: ParsedSearchParam = { code: 'name', modifier: 'exact', values: ['Smith'] };
     const result = buildWhereFragment(nameImpl, param, 1, 'Patient');
     expect(result).not.toBeNull();
-    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND __lookup."name" = $1)');
-    expect(result!.values).toEqual(['Smith']);
+    expect(result!.sql).toBe('EXISTS (SELECT 1 FROM "HumanName" __lookup WHERE __lookup."resourceId" = "Patient"."id" AND (__lookup."family" = $1 OR __lookup."given" = $2))');
+    expect(result!.values).toEqual(['Smith', 'Smith']);
   });
 
   it('name :contains generates EXISTS with LIKE wildcards on HumanName table', () => {
@@ -639,7 +639,7 @@ describe('Phase 17 — lookup-table strategy', () => {
 // Phase 18: Chained Search
 // =============================================================================
 
-describe('Phase 18 — chained search WHERE clause', () => {
+describe('Phase 18 鈥?chained search WHERE clause', () => {
   // Build a registry with impls for both Observation and Patient
   function makeChainRegistry(): SearchParameterRegistry {
     const registry = new SearchParameterRegistry();
@@ -756,7 +756,7 @@ describe('Phase 18 — chained search WHERE clause', () => {
     expect(result!.values.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('chained search with :exact modifier on target param', () => {
+  it('chained search with :exact modifier on target param (PERS-07)', () => {
     const registry = makeChainRegistry();
     const params: ParsedSearchParam[] = [
       {
@@ -770,8 +770,10 @@ describe('Phase 18 — chained search WHERE clause', () => {
     const result = buildWhereClause(params, registry, 'Observation');
     expect(result).not.toBeNull();
     expect(result!.sql).toContain('EXISTS');
-    expect(result!.sql).toContain('= $1');
+    // PERS-07: name:exact now matches family OR given individually
+    expect(result!.sql).toContain('"family"');
+    expect(result!.sql).toContain('"given"');
     expect(result!.sql).not.toContain('LIKE');
-    expect(result!.values).toEqual(['Smith']);
+    expect(result!.values).toEqual(['Smith', 'Smith']);
   });
 });
